@@ -247,7 +247,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               child: Text(item.averageCost?.toStringAsFixed(2) ?? '-',
                   textAlign: TextAlign.right)),
           GestureDetector(
-            onTap: () => _toggleFavorite(item, isFavorited),
+            onTap: () => _toggleFavorite(context, item, isFavorited),
             child: Container(
               width: 40,
               height: 40,
@@ -268,12 +268,36 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  void _toggleFavorite(AuctionItem item, bool isFavorited) {
+  void _toggleFavorite(BuildContext context, AuctionItem item, bool isFavorited) {
     final collection = FirebaseFirestore.instance.collection('favorites');
     final docId = item.id.toString();
 
     if (isFavorited) {
-      collection.doc(docId).delete();
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Подтверждение'),
+            content: Text('Вы уверены, что хотите удалить "${item.name}" из избранного?'),
+            actions: <Widget>[
+              TextButton(
+                child: const Text('Отмена'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+              ElevatedButton(
+                child: const Text('Удалить'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () {
+                  collection.doc(docId).delete();
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
     } else {
       collection.doc(docId).set(item.toFirestore());
     }
