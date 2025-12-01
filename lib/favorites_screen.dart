@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'blizzard_api_service.dart';
-import 'main.dart'; // Для доступа к AuctionItem
+import 'models/auction_item.dart'; 
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -15,6 +15,7 @@ class FavoritesScreen extends StatefulWidget {
 class _FavoritesScreenState extends State<FavoritesScreen> {
   int _countForAverage = 10;
   bool _isPriceUpdating = false;
+  bool _isRenaming = false;
   final TextEditingController _countController = TextEditingController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -106,6 +107,71 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     }
   }
 
+  Future<void> _renameDuplicateFavorites() async {
+    setState(() => _isRenaming = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Проверка и переименование дубликатов...')),
+    );
+
+    try {
+      final favoritesSnapshot = await _firestore.collection('favorites').get();
+      final favorites = favoritesSnapshot.docs
+          .map((doc) => AuctionItem.fromFirestore(doc))
+          .toList();
+
+      final Map<String, List<AuctionItem>> itemsByName = {};
+      for (var item in favorites) {
+        if (itemsByName.containsKey(item.name)) {
+          itemsByName[item.name]!.add(item);
+        } else {
+          itemsByName[item.name] = [item];
+        }
+      }
+
+      final WriteBatch batch = _firestore.batch();
+      int renameCount = 0;
+
+      for (var entry in itemsByName.entries) {
+        if (entry.value.length > 1) {
+          final items = entry.value;
+          items.sort((a, b) => a.id.compareTo(b.id)); 
+
+          for (int i = 0; i < items.length; i++) {
+            final item = items[i];
+            final newName = '${item.name} ${i + 1}';
+            final docRef = _firestore.collection('favorites').doc(item.id.toString());
+            batch.update(docRef, {'name': newName});
+            renameCount++;
+          }
+        }
+      }
+
+      if (renameCount > 0) {
+        await batch.commit();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Переименовано $renameCount дубликатов.'),
+              backgroundColor: Colors.green),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Дубликаты не найдены.'),
+              backgroundColor: Colors.orange),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Ошибка при переименовании: $e'),
+            backgroundColor: Colors.red),
+      );
+    } finally {
+      setState(() => _isRenaming = false);
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -161,6 +227,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   Widget _buildControls(BuildContext context) {
+    final buttonStyle = ElevatedButton.styleFrom(
+      backgroundColor: const Color(0xFF1E3A8A),
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+    );
+
     return Row(
       children: [
         SizedBox(
@@ -183,11 +255,16 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             onPressed: _updateFavoritePrices,
             icon: const Icon(Icons.refresh, size: 18),
             label: const Text('Обновить цены'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E3A8A),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            ),
+            style: buttonStyle,
+          ),
+        const SizedBox(width: 10),
+        if (_isRenaming)
+          const CircularProgressIndicator()
+        else
+          ElevatedButton(
+            onPressed: _renameDuplicateFavorites,
+            style: buttonStyle,
+            child: const Text('Переименовать дубликаты'),
           ),
       ],
     );
@@ -287,12 +364,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 },
               ),
               ElevatedButton(
-                child: const Text('Удалить'),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                 onPressed: () {
                   collection.doc(docId).delete();
                   Navigator.of(context).pop();
                 },
+                child: const Text('Удалить'),
               ),
             ],
           );

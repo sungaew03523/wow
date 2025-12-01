@@ -2,7 +2,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import './wow_config.dart';
-import './main.dart'; // Для доступа к AuctionItem
+import './models/auction_item.dart'; // Исправленный импорт
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 
@@ -41,6 +41,57 @@ class BlizzardApiService {
     if (response.statusCode == 200) return jsonDecode(response.body)['access_token'];
     throw Exception('Ошибка получения токена: ${response.statusCode}');
   }
+  
+  Future<Map<int, double>> getCommodityPricesByIds(List<int> itemIds) async {
+    if (itemIds.isEmpty) return {};
+
+    final token = await _getAccessToken();
+    final Map<int, List<double>> pricesByItem = {};
+
+    // Fetch from commodities endpoint
+    Uri? nextUri = Uri.https(
+      '${WowApiConfig.region}.api.blizzard.com',
+      '/data/wow/auctions/commodities',
+      {'namespace': WowApiConfig.namespace, 'locale': WowApiConfig.locale},
+    );
+
+    while (nextUri != null) {
+      final response = await _client.get(nextUri, headers: {'Authorization': 'Bearer $token'});
+      if (response.statusCode != 200) {
+        throw Exception('Ошибка загрузки commodities: ${response.statusCode} ${response.body}');
+      }
+      final data = jsonDecode(response.body);
+      final commoditiesRaw = data['auctions'] as List?;
+      if (commoditiesRaw == null) break;
+
+      for (final commodity in commoditiesRaw) {
+        final item = commodity['item'] as Map<String, dynamic>?;
+        if (item == null) continue;
+        final int itemId = item['id'];
+
+        if (itemIds.contains(itemId)) {
+          final unitPrice = commodity['unit_price'] as int?;
+          if (unitPrice != null) {
+            pricesByItem.putIfAbsent(itemId, () => []).add(unitPrice / 10000.0); // Price in gold
+          }
+        }
+      }
+      final nextLink = data['_links']?['next']?['href'] as String?;
+      nextUri = nextLink != null ? Uri.parse(nextLink) : null;
+    }
+
+    // Calculate the average price for each item
+    final Map<int, double> averagePrices = {};
+    pricesByItem.forEach((itemId, prices) {
+      if (prices.isNotEmpty) {
+        final sum = prices.reduce((a, b) => a + b);
+        averagePrices[itemId] = sum / prices.length;
+      }
+    });
+
+    return averagePrices;
+  }
+
 
   Future<List<AuctionItem>> fetchItemsFromBlizzard() async {
     final token = await _getAccessToken();

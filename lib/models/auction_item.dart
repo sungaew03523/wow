@@ -1,14 +1,13 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// --- Модель данных для предмета ---
+// --- Модель данных для предмета на аукционе ---
 class AuctionItem {
   final int id;
   final String name;
   final String? iconUrl;
   final double? minimalCost;
   final double? averageCost;
-  final int itemLevel; // Уровень предмета (1, 2 или 3)
 
   AuctionItem({
     required this.id,
@@ -16,7 +15,6 @@ class AuctionItem {
     this.iconUrl,
     this.minimalCost,
     this.averageCost,
-    this.itemLevel = 1, // Значение по умолчанию
   });
 
   factory AuctionItem.fromFirestore(DocumentSnapshot doc) {
@@ -27,7 +25,6 @@ class AuctionItem {
       iconUrl: data['iconUrl'],
       minimalCost: (data['minimalCost'] as num?)?.toDouble(),
       averageCost: (data['averageCost'] as num?)?.toDouble(),
-      itemLevel: data['itemLevel'] ?? 1, // Загружаем уровень, по умолчанию 1
     );
   }
 
@@ -36,9 +33,20 @@ class AuctionItem {
       'id': id,
       'name': name,
       'iconUrl': iconUrl,
-      'itemLevel': itemLevel, // Сохраняем уровень
       if (minimalCost != null) 'minimalCost': minimalCost,
       if (averageCost != null) 'averageCost': averageCost,
     };
   }
+
+  // Добавляем эти методы для корректного сравнения объектов
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AuctionItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
 }
