@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import './wow_config.dart';
@@ -43,6 +44,13 @@ class BlizzardApiService {
     throw Exception('Ошибка получения токена: ${response.statusCode}');
   }
 
+  // Helper function to add a cache-busting parameter
+  Uri _addCacheBust(Uri uri) {
+    final params = Map<String, dynamic>.from(uri.queryParameters);
+    params['_'] = DateTime.now().millisecondsSinceEpoch.toString();
+    return uri.replace(queryParameters: params);
+  }
+
   Future<Map<int, double>> getCommodityPricesByIds(List<int> itemIds) async {
     if (itemIds.isEmpty) {
       return {};
@@ -51,7 +59,6 @@ class BlizzardApiService {
     final token = await _getAccessToken();
     final Map<int, List<double>> pricesByItem = {};
 
-    // Fetch from commodities endpoint
     Uri? nextUri = Uri.https(
       '${WowApiConfig.region}.api.blizzard.com',
       '/data/wow/auctions/commodities',
@@ -60,7 +67,7 @@ class BlizzardApiService {
 
     while (nextUri != null) {
       final response = await _client.get(
-        nextUri,
+        _addCacheBust(nextUri), // Add cache buster
         headers: {'Authorization': 'Bearer $token'},
       );
       if (response.statusCode != 200) {
@@ -94,7 +101,6 @@ class BlizzardApiService {
       nextUri = nextLink != null ? Uri.parse(nextLink) : null;
     }
 
-    // Calculate the average price for each item
     final Map<int, double> averagePrices = {};
     pricesByItem.forEach((itemId, prices) {
       if (prices.isNotEmpty) {
@@ -133,7 +139,7 @@ class BlizzardApiService {
     while (nextUri != null && pageCount < maxPages) {
       pageCount++;
       final response = await _client.get(
-        nextUri,
+        _addCacheBust(nextUri), // Add cache buster
         headers: {'Authorization': 'Bearer $token'},
       );
       if (response.statusCode != 200) {
@@ -186,8 +192,8 @@ class BlizzardApiService {
         );
 
         final responses = await Future.wait([
-          _client.get(nameUri, headers: {'Authorization': 'Bearer $token'}),
-          _client.get(mediaUri, headers: {'Authorization': 'Bearer $token'}),
+          _client.get(_addCacheBust(nameUri), headers: {'Authorization': 'Bearer $token'}), // Add cache buster
+          _client.get(_addCacheBust(mediaUri), headers: {'Authorization': 'Bearer $token'}), // Add cache buster
         ]);
 
         final nameResponse = responses[0];
@@ -241,7 +247,7 @@ class BlizzardApiService {
 
     while (nextUri != null) {
       final response = await _client.get(
-        nextUri,
+        _addCacheBust(nextUri), // Add cache buster
         headers: {'Authorization': 'Bearer $token'},
       );
 
