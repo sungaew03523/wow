@@ -1,4 +1,3 @@
-
 class WowApiConfig {
   static const clientId = '9698f2d7dc914d498268061c99bafdab';
   static const clientSecret = 'kXWmmn4PPAFezQs8OGnz7biauB8G2Gw6';

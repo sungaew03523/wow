@@ -1,4 +1,3 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 // --- Модель данных для предмета на аукционе ---
@@ -8,6 +7,7 @@ class AuctionItem {
   final String? iconUrl;
   final double? minimalCost;
   final double? averageCost;
+  final Map<String, dynamic>? averagePriceHistory;
 
   AuctionItem({
     required this.id,
@@ -15,6 +15,7 @@ class AuctionItem {
     this.iconUrl,
     this.minimalCost,
     this.averageCost,
+    this.averagePriceHistory,
   });
 
   factory AuctionItem.fromFirestore(DocumentSnapshot doc) {
@@ -25,6 +26,9 @@ class AuctionItem {
       iconUrl: data['iconUrl'],
       minimalCost: (data['minimalCost'] as num?)?.toDouble(),
       averageCost: (data['averageCost'] as num?)?.toDouble(),
+      averagePriceHistory: data['averagePriceHistory'] != null
+          ? Map<String, dynamic>.from(data['averagePriceHistory'])
+          : null,
     );
   }
 
@@ -35,6 +39,8 @@ class AuctionItem {
       'iconUrl': iconUrl,
       if (minimalCost != null) 'minimalCost': minimalCost,
       if (averageCost != null) 'averageCost': averageCost,
+      if (averagePriceHistory != null)
+        'averagePriceHistory': averagePriceHistory,
     };
   }
 
@@ -48,5 +54,4 @@ class AuctionItem {
 
   @override
   int get hashCode => id.hashCode;
-
 }
