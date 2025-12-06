@@ -334,35 +334,75 @@ class CategoryPanel extends StatelessWidget {
 
                 final formattedPrice = NumberFormat("#,##0", "en_US").format(latestPrice);
 
-                // Prepare data for the chart
                 final List<FlSpot> spots = [];
+                double minY = double.maxFinite;
+                double maxY = double.minPositive;
+
                 for (var i = 0; i < sortedKeys.length; i++) {
                   final key = sortedKeys[i];
-                  final price = prices[key];
-                  spots.add(FlSpot(i.toDouble(), price.toDouble()));
+                  final value = prices[key];
+                  if (value != null) {
+                    final doubleValue = value.toDouble();
+                    spots.add(FlSpot(i.toDouble(), doubleValue));
+                    if (doubleValue < minY) minY = doubleValue;
+                    if (doubleValue > maxY) maxY = doubleValue;
+                  }
                 }
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$formattedPrice g', style: textTheme.bodyLarge?.copyWith(fontSize: 20, color: Colors.amber)),
+                    Text('$formattedPrice g', style: textTheme.bodyLarge?.copyWith(fontSize: 20, color: Colors.greenAccent)),
                     const SizedBox(height: 20),
                     SizedBox(
-                      height: 150,
+                      height: 100,
                       child: LineChart(
                         LineChartData(
-                          gridData: FlGridData(show: false),
-                          titlesData: FlTitlesData(show: false),
+                          gridData: const FlGridData(show: false),
+                          titlesData: const FlTitlesData(
+                            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          ),
                           borderData: FlBorderData(show: false),
+                          lineTouchData: LineTouchData(
+                            touchTooltipData: LineTouchTooltipData(
+                              fitInsideHorizontally: true,
+                              getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+                                return touchedBarSpots.map((barSpot) {
+                                  final spotIndex = barSpot.spotIndex;
+                                  if (spotIndex < 0 || spotIndex >= sortedKeys.length) {
+                                    return null;
+                                  }
+                                  
+                                  final date = DateFormat('yyyy-MM-dd HH').parse(sortedKeys[spotIndex]);
+                                  final price = barSpot.y.toInt();
+
+                                  return LineTooltipItem(
+                                    '${DateFormat.yMMMd().format(date)}\n${NumberFormat("#,##0", "en_US").format(price)} g',
+                                    const TextStyle(color: Colors.white, fontSize: 12),
+                                  );
+                                }).where((item) => item != null).toList().cast<LineTooltipItem>();
+                              },
+                            ),
+                          ),
+                          minX: 0,
+                          maxX: (spots.length - 1).toDouble(),
+                          minY: minY * 0.95,
+                          maxY: maxY * 1.05,
                           lineBarsData: [
                             LineChartBarData(
                               spots: spots,
                               isCurved: true,
-                              color: Colors.amber,
-                              barWidth: 3,
+                              color: Colors.greenAccent,
+                              barWidth: 2,
                               isStrokeCapRound: true,
-                              dotData: FlDotData(show: false),
-                              belowBarData: BarAreaData(show: false),
+                              dotData: const FlDotData(show: false),
+                              belowBarData: BarAreaData(
+                                show: true,
+                                color: Colors.greenAccent.withAlpha(50),
+                              ),
                             ),
                           ],
                         ),

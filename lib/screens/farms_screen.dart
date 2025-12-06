@@ -59,7 +59,6 @@ class _FarmsScreenState extends State<FarmsScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   Key _listViewKey = UniqueKey();
   bool _isPriceUpdating = false;
-  int _countForAverage = 10; // Значение по умолчанию
 
   final List<String> _professions = [
     'Алхимия',
@@ -74,30 +73,6 @@ class _FarmsScreenState extends State<FarmsScreen> {
     'Горное дело',
     'Снятие шкур',
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    try {
-      final doc = await _firestore
-          .collection('settings')
-          .doc('user_settings')
-          .get();
-      if (doc.exists && doc.data()!.containsKey('countForAverage')) {
-        if (mounted) {
-          setState(() {
-            _countForAverage = doc.data()!['countForAverage'];
-          });
-        }
-      }
-    } catch (e) {
-      print("Ошибка загрузки настроек: $e");
-    }
-  }
 
   Future<void> _showFarmDialog({Farm? farm}) async {
     final GlobalKey<FormState> formKey = GlobalKey<FormState>();
@@ -433,11 +408,13 @@ class _FarmsScreenState extends State<FarmsScreen> {
     }
 
     try {
-      final favoriteIds = (await _firestore.collection('favorites').get()).docs
-          .map((doc) => doc.id)
-          .toList();
+      final favoritesSnapshot = await _firestore.collection('favorites').get();
+      final Map<String, int> itemsToUpdate = {
+        for (var doc in favoritesSnapshot.docs)
+          doc.id: ((doc.data() as Map<String, dynamic>)['analysisVolume'] ?? 1000) as int
+      };
 
-      if (favoriteIds.isEmpty) {
+      if (itemsToUpdate.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -446,13 +423,11 @@ class _FarmsScreenState extends State<FarmsScreen> {
             ),
           );
         }
+        setState(() => _isPriceUpdating = false);
         return;
       }
 
-      await BlizzardApiService().fetchReagentPrices(
-        _countForAverage,
-        favoriteIds,
-      );
+      await BlizzardApiService().fetchReagentPrices(itemsToUpdate);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -696,9 +671,10 @@ class _FarmProfitCalculatorState extends State<FarmProfitCalculator> {
       for (final doc in querySnapshot.docs) {
         final data = doc.data();
         final name = data['name'] as String?;
-        final avgCost = (data['averageCost'] as num?)?.toDouble();
-        if (name != null && avgCost != null) {
-          prices[name] = avgCost;
+        // ИСПРАВЛЕНО: Используем weightedAveragePrice
+        final price = (data['weightedAveragePrice'] as num?)?.toDouble();
+        if (name != null && price != null) {
+          prices[name] = price;
         }
       }
     }

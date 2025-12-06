@@ -1,30 +1,9 @@
-
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import './wow_config.dart';
 import './models/auction_item.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-
-class ReagentPrice {
-  final int itemId;
-  final int quantity;
-  final double minimalCost;
-  final List<double> costList;
-  final double averageCost;
-  final String pictureRef;
-  final String name;
-
-  ReagentPrice({
-    required this.itemId,
-    required this.quantity,
-    required this.minimalCost,
-    required this.costList,
-    required this.averageCost,
-    required this.pictureRef,
-    required this.name,
-  });
-}
 
 class BlizzardApiService {
   final http.Client _client = http.Client();
@@ -44,7 +23,6 @@ class BlizzardApiService {
     throw Exception('Ошибка получения токена: ${response.statusCode}');
   }
 
-  // Helper function to add a cache-busting parameter
   Uri _addCacheBust(Uri uri) {
     final params = Map<String, dynamic>.from(uri.queryParameters);
     params['_'] = DateTime.now().millisecondsSinceEpoch.toString();
@@ -57,7 +35,7 @@ class BlizzardApiService {
       '${WowApiConfig.region}.api.blizzard.com',
       '/data/wow/token/index',
       {
-        'namespace': WowApiConfig.namespace, // Dynamic namespace
+        'namespace': WowApiConfig.namespace,
         'locale': WowApiConfig.locale,
       },
     );
@@ -70,85 +48,18 @@ class BlizzardApiService {
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       final priceInCopper = data['price'] as int;
-      return priceInCopper ~/ 10000; // Convert from copper to gold
+      return priceInCopper ~/ 10000;
     } else {
       throw Exception(
           'Ошибка загрузки цены жетона: ${response.statusCode} ${response.body}');
     }
   }
 
-  Future<Map<int, double>> getCommodityPricesByIds(List<int> itemIds) async {
-    if (itemIds.isEmpty) {
-      return {};
-    }
-
-    final token = await _getAccessToken();
-    final Map<int, List<double>> pricesByItem = {};
-
-    Uri? nextUri = Uri.https(
-      '${WowApiConfig.region}.api.blizzard.com',
-      '/data/wow/auctions/commodities',
-      {'namespace': WowApiConfig.namespace, 'locale': WowApiConfig.locale},
-    );
-
-    while (nextUri != null) {
-      final response = await _client.get(
-        _addCacheBust(nextUri), // Add cache buster
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      if (response.statusCode != 200) {
-        throw Exception(
-          'Ошибка загрузки commodities: ${response.statusCode} ${response.body}',
-        );
-      }
-      final data = jsonDecode(response.body);
-      final commoditiesRaw = data['auctions'] as List?;
-      if (commoditiesRaw == null) {
-        break;
-      }
-
-      for (final commodity in commoditiesRaw) {
-        final item = commodity['item'] as Map<String, dynamic>?;
-        if (item == null) {
-          continue;
-        }
-        final int itemId = item['id'];
-
-        if (itemIds.contains(itemId)) {
-          final unitPrice = commodity['unit_price'] as int?;
-          if (unitPrice != null) {
-            pricesByItem
-                .putIfAbsent(itemId, () => [])
-                .add(unitPrice / 10000.0); // Price in gold
-          }
-        }
-      }
-      final nextLink = data['_links']?['next']?['href'] as String?;
-      nextUri = nextLink != null ? Uri.parse(nextLink) : null;
-    }
-
-    final Map<int, double> averagePrices = {};
-    pricesByItem.forEach((itemId, prices) {
-      if (prices.isNotEmpty) {
-        final sum = prices.reduce((a, b) => a + b);
-        averagePrices[itemId] = sum / prices.length;
-      }
-    });
-
-    return averagePrices;
-  }
-
   Future<List<AuctionItem>> fetchItemsFromBlizzard() async {
     final token = await _getAccessToken();
     final Set<int> itemIds = await _fetchCommodityIds(token);
-
     final limitedItemIds = itemIds.take(100).toSet();
-    print('Будет загружено ${limitedItemIds.length} предметов (лимит 100).');
-
-    final List<AuctionItem> items = await _fetchItemDetails(
-      token,
-      limitedItemIds,
-    );
+    final List<AuctionItem> items = await _fetchItemDetails(token, limitedItemIds);
     return items;
   }
 
@@ -165,7 +76,7 @@ class BlizzardApiService {
     while (nextUri != null && pageCount < maxPages) {
       pageCount++;
       final response = await _client.get(
-        _addCacheBust(nextUri), // Add cache buster
+        _addCacheBust(nextUri),
         headers: {'Authorization': 'Bearer $token'},
       );
       if (response.statusCode != 200) {
@@ -174,21 +85,16 @@ class BlizzardApiService {
 
       final data = jsonDecode(response.body);
       final commoditiesRaw = data['auctions'] as List?;
-      if (commoditiesRaw == null) {
-        break;
-      }
+      if (commoditiesRaw == null) break;
 
       for (final commodity in commoditiesRaw) {
         final item = commodity['item'] as Map<String, dynamic>?;
-        if (item != null) {
-          listID.add(item['id'] as int);
-        }
+        if (item != null) listID.add(item['id'] as int);
       }
 
       final nextLink = data['_links']?['next']?['href'] as String?;
       nextUri = nextLink != null ? Uri.parse(nextLink) : null;
     }
-    print('Найдено ${listID.length} уникальных ID на $pageCount страницах.');
     return listID;
   }
 
@@ -197,222 +103,156 @@ class BlizzardApiService {
     Set<int> itemIds,
   ) async {
     List<AuctionItem> items = [];
-
     for (final id in itemIds) {
       try {
         final nameUri = Uri.https(
           '${WowApiConfig.region}.api.blizzard.com',
           '/data/wow/item/$id',
-          {
-            'namespace': WowApiConfig.staticNamespace,
-            'locale': WowApiConfig.locale,
-          },
+          {'namespace': WowApiConfig.staticNamespace, 'locale': WowApiConfig.locale},
         );
         final mediaUri = Uri.https(
           '${WowApiConfig.region}.api.blizzard.com',
           '/data/wow/media/item/$id',
-          {
-            'namespace': WowApiConfig.staticNamespace,
-            'locale': WowApiConfig.locale,
-          },
+          {'namespace': WowApiConfig.staticNamespace, 'locale': WowApiConfig.locale},
         );
 
         final responses = await Future.wait([
-          _client.get(_addCacheBust(nameUri), headers: {'Authorization': 'Bearer $token'}), // Add cache buster
-          _client.get(_addCacheBust(mediaUri), headers: {'Authorization': 'Bearer $token'}), // Add cache buster
+          _client.get(_addCacheBust(nameUri), headers: {'Authorization': 'Bearer $token'}),
+          _client.get(_addCacheBust(mediaUri), headers: {'Authorization': 'Bearer $token'}),
         ]);
 
-        final nameResponse = responses[0];
-        final mediaResponse = responses[1];
-
-        if (nameResponse.statusCode == 200 && mediaResponse.statusCode == 200) {
-          final nameData = jsonDecode(nameResponse.body);
-          final mediaData = jsonDecode(mediaResponse.body);
-
+        if (responses[0].statusCode == 200 && responses[1].statusCode == 200) {
+          final nameData = jsonDecode(responses[0].body);
+          final mediaData = jsonDecode(responses[1].body);
           final assets = mediaData['assets'] as List?;
-          final iconAsset = assets?.firstWhere(
-            (e) => e['key'] == 'icon',
-            orElse: () => null,
-          );
+          final iconAsset = assets?.firstWhere((e) => e['key'] == 'icon', orElse: () => null);
 
-          items.add(
-            AuctionItem(
-              id: id,
-              name: nameData['name'] as String? ?? 'Без имени',
-              iconUrl: iconAsset?['value'] as String?,
-            ),
-          );
-        } else {
-          print(
-            'Ошибка для ID $id: Name Status=${nameResponse.statusCode}, Media Status=${mediaResponse.statusCode}',
-          );
+          items.add(AuctionItem(
+            id: id,
+            name: nameData['name'] as String? ?? 'Без имени',
+            iconUrl: iconAsset?['value'] as String?,
+          ));
         }
       } catch (e) {
         print('Исключение при обработке предмета $id: $e');
       }
     }
-    print('Загружены детали для ${items.length} предметов.');
     return items;
   }
 
-  Future<void> fetchReagentPrices(int countForAverage, List<String> ids) async {
-    if (ids.isEmpty) {
-      print("Список ID для обновления пуст.");
-      return;
-    }
+  Future<void> fetchReagentPrices(Map<String, int> itemsToUpdate) async {
+    if (itemsToUpdate.isEmpty) return;
 
     final token = await _getAccessToken();
+    final favoriteIds = itemsToUpdate.keys.toList();
+    final Map<int, List<Map<String, dynamic>>> auctionsByItem = {};
 
     Uri? nextUri = Uri.https(
-      '${WowApiConfig.region}.api.blizzard.com',
-      '/data/wow/auctions/commodities',
-      {'namespace': WowApiConfig.namespace, 'locale': WowApiConfig.locale},
-    );
-
-    final Map<int, ReagentPrice> aggregated = {};
+        '${WowApiConfig.region}.api.blizzard.com',
+        '/data/wow/auctions/commodities',
+        {'namespace': WowApiConfig.namespace, 'locale': WowApiConfig.locale});
 
     while (nextUri != null) {
-      final response = await _client.get(
-        _addCacheBust(nextUri), // Add cache buster
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final response = await _client.get(_addCacheBust(nextUri), headers: {'Authorization': 'Bearer $token'});
+      if (response.statusCode != 200) throw Exception('Ошибка commodities: ${response.body}');
+      
+      final data = jsonDecode(response.body);
+      final auctions = (data['auctions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-      if (response.statusCode != 200) {
-        throw Exception(
-          'Ошибка загрузки commodities: ${response.statusCode} ${response.body}',
-        );
-      }
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final commoditiesRaw = data['auctions'];
-      final commodities = (commoditiesRaw as List).cast<Map<String, dynamic>>();
-
-      for (final commodity in commodities) {
-        final item = commodity['item'] as Map<String, dynamic>?;
-        if (item == null) {
-          continue;
-        }
-
-        final itemId = item['id'] as int;
-        if (!ids.contains(itemId.toString())) {
-          continue;
-        }
-
-        final quantity = commodity['quantity'] as int? ?? 0;
-        final unitPriceCopper = commodity['unit_price'] as int?;
-
-        if (quantity == 0 || unitPriceCopper == null) {
-          continue;
-        }
-
-        final totalPriceGold = (unitPriceCopper * quantity) / 10000.0;
-
-        double sumFirstX(List<double> costList) {
-          double sum;
-          if (costList.length < countForAverage) {
-            sum = costList.isEmpty
-                ? 0.0
-                : costList.reduce((a, b) => a + b) / costList.length;
-          } else {
-            sum = 0.0;
-            for (int i = 0; i < countForAverage; i++) {
-              sum += costList[i];
-            }
-            sum /= countForAverage;
-          }
-          return double.parse(sum.toStringAsFixed(2));
-        }
-
-        final existing = aggregated[itemId];
-        final currentCost = double.parse(
-          (totalPriceGold / quantity).toStringAsFixed(2),
-        );
-
-        if (existing == null) {
-          final newCostList = [currentCost];
-          aggregated[itemId] = ReagentPrice(
-            itemId: itemId,
-            quantity: quantity,
-            minimalCost: currentCost,
-            costList: newCostList,
-            averageCost: sumFirstX(newCostList),
-            pictureRef: '',
-            name: '',
-          );
-        } else {
-          final updatedCostList = [...existing.costList, currentCost];
-          updatedCostList.sort();
-
-          final newMinimalCost = double.parse(
-            (currentCost < existing.minimalCost
-                    ? currentCost
-                    : existing.minimalCost)
-                .toStringAsFixed(2),
-          );
-
-          aggregated[itemId] = ReagentPrice(
-            itemId: itemId,
-            quantity: existing.quantity + quantity,
-            minimalCost: newMinimalCost,
-            costList: updatedCostList,
-            averageCost: sumFirstX(updatedCostList),
-            pictureRef: '',
-            name: '',
-          );
+      for (var auction in auctions) {
+        final itemId = auction['item']?['id'] as int?;
+        if (itemId != null && favoriteIds.contains(itemId.toString())) {
+          auctionsByItem.putIfAbsent(itemId, () => []).add(auction);
         }
       }
       final nextLink = data['_links']?['next']?['href'] as String?;
       nextUri = nextLink != null ? Uri.parse(nextLink) : null;
     }
 
-    // Обновляем данные в Firestore с историей цен
-    for (final priceData in aggregated.values) {
-      final docRef = _firestore
-          .collection('favorites')
-          .doc(priceData.itemId.toString());
+    print("--- Начинаем новый расчет цен ---");
 
+    for (var itemIdStr in favoriteIds) {
+      final itemId = int.parse(itemIdStr);
+      final analysisVolume = itemsToUpdate[itemIdStr] ?? 1000;
+      final itemAuctions = auctionsByItem[itemId];
+
+      print("\n--- Обработка предмета ID: $itemId (Объем: $analysisVolume) ---");
+
+      if (itemAuctions == null || itemAuctions.isEmpty) {
+        print('Нет аукционов для предмета $itemId, пропуск.');
+        continue;
+      }
+      
+      itemAuctions.sort((a, b) => (a['unit_price'] as int).compareTo(b['unit_price'] as int));
+
+      double minimalCost = (itemAuctions.first['unit_price'] as int) / 10000.0;
+      print("Минимальная цена (самый дешевый лот): $minimalCost");
+
+      int accumulatedQuantity = 0;
+      double totalCostForWeightedAverage = 0;
+      double marketPrice = minimalCost;
+
+      print("Начинаем итерацию по отсортированным лотам:");
+      int lotCounter = 0;
+      for (var auction in itemAuctions) {
+        lotCounter++;
+        final quantity = auction['quantity'] as int;
+        final unitPrice = (auction['unit_price'] as int) / 10000.0;
+
+        if (accumulatedQuantity < analysisVolume) {
+          final quantityToConsider = (accumulatedQuantity + quantity) > analysisVolume
+              ? analysisVolume - accumulatedQuantity
+              : quantity;
+
+          print("  Лот $lotCounter: Цена: $unitPrice, Кол-во: $quantity. Учитываем: $quantityToConsider");
+          
+          totalCostForWeightedAverage += quantityToConsider * unitPrice;
+          accumulatedQuantity += quantityToConsider;
+          marketPrice = unitPrice;
+
+          print("    -> Накоплено кол-во: $accumulatedQuantity, Общая стоимость для среднего: ${totalCostForWeightedAverage.toStringAsFixed(2)}, Цена стены: $marketPrice");
+        } else {
+           print("  Лот $lotCounter: Цена: $unitPrice, Кол-во: $quantity. Пропускаем (объем $analysisVolume достигнут).");
+           break;
+        }
+      }
+
+      double weightedAveragePrice = accumulatedQuantity > 0
+          ? totalCostForWeightedAverage / accumulatedQuantity
+          : minimalCost;
+
+      print("--- ИТОГ для ID: $itemId ---");
+      print("  Цена стены (Market Price): ${marketPrice.toStringAsFixed(2)}");
+      print("  Средневзвешенная цена (Weighted Avg): ${weightedAveragePrice.toStringAsFixed(2)}");
+
+      final docRef = _firestore.collection('favorites').doc(itemIdStr);
       await _firestore.runTransaction((transaction) async {
         final docSnapshot = await transaction.get(docRef);
+        if (!docSnapshot.exists) return;
 
-        if (!docSnapshot.exists) {
-          print(
-            "Документ ${priceData.itemId} не найден в избранном, пропускаем.",
-          );
-          return;
-        }
-
-        // Получаем существующую историю или создаем новую
         final data = docSnapshot.data() as Map<String, dynamic>;
-        final history =
-            (data['averagePriceHistory'] as Map<String, dynamic>?) ?? {};
+        final history = (data['averagePriceHistory'] as Map<String, dynamic>?) ?? {};
 
-        // Добавляем новую запись
         final now = DateTime.now();
         final formatter = DateFormat('yyyy-MM-dd HH');
         final timestampKey = formatter.format(now);
-        history[timestampKey] = priceData.averageCost;
+        history[timestampKey] = weightedAveragePrice;
 
-        // Ограничиваем размер истории (например, последние 24 часа)
         const maxHistoryLength = 24;
         if (history.length > maxHistoryLength) {
           final sortedKeys = history.keys.toList()..sort();
-          final keysToRemove = sortedKeys.take(
-            history.length - maxHistoryLength,
-          );
-          for (final key in keysToRemove) {
-            history.remove(key);
-          }
+          final keysToRemove = sortedKeys.take(history.length - maxHistoryLength);
+          for (final key in keysToRemove) history.remove(key);
         }
 
         transaction.update(docRef, {
-          'minimalCost': priceData.minimalCost,
-          'averageCost': priceData.averageCost,
+          'minimalCost': minimalCost,
+          'marketPrice': marketPrice,
+          'weightedAveragePrice': weightedAveragePrice,
           'averagePriceHistory': history,
         });
       });
     }
-    print(
-      "Цены и история для ${aggregated.length} избранных предметов обновлены.",
-    );
+    print("Цены для ${favoriteIds.length} избранных предметов обновлены.");
   }
 }

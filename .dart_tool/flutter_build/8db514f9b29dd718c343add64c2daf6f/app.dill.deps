@@ -1329,12 +1329,12 @@ file:///home/user/myapp/.dart_tool/flutter_build/8db514f9b29dd718c343add64c2daf6
 file:///home/user/myapp/.dart_tool/package_config.json
 file:///home/user/myapp/lib/app_router.dart
 file:///home/user/myapp/lib/blizzard_api_service.dart
-file:///home/user/myapp/lib/farms_screen.dart
-file:///home/user/myapp/lib/favorites_screen.dart
 file:///home/user/myapp/lib/firebase_options.dart
 file:///home/user/myapp/lib/main.dart
 file:///home/user/myapp/lib/models/auction_item.dart
-file:///home/user/myapp/lib/screens/auction_house_screen.dart
+file:///home/user/myapp/lib/screens/farms_screen.dart
+file:///home/user/myapp/lib/screens/favorites_screen.dart
+file:///home/user/myapp/lib/screens/home_screen.dart
 file:///home/user/myapp/lib/wow_config.dart
 org-dartlang-sdk:///dart-sdk/lib/_http/crypto.dart
 org-dartlang-sdk:///dart-sdk/lib/_http/embedder_config.dart
