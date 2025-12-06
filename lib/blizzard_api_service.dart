@@ -51,6 +51,32 @@ class BlizzardApiService {
     return uri.replace(queryParameters: params);
   }
 
+  Future<int> fetchWowTokenPrice() async {
+    final token = await _getAccessToken();
+    final uri = Uri.https(
+      '${WowApiConfig.region}.api.blizzard.com',
+      '/data/wow/token/index',
+      {
+        'namespace': WowApiConfig.namespace, // Dynamic namespace
+        'locale': WowApiConfig.locale,
+      },
+    );
+
+    final response = await _client.get(
+      _addCacheBust(uri),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final priceInCopper = data['price'] as int;
+      return priceInCopper ~/ 10000; // Convert from copper to gold
+    } else {
+      throw Exception(
+          'Ошибка загрузки цены жетона: ${response.statusCode} ${response.body}');
+    }
+  }
+
   Future<Map<int, double>> getCommodityPricesByIds(List<int> itemIds) async {
     if (itemIds.isEmpty) {
       return {};

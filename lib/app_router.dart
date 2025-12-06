@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'screens/auction_house_screen.dart'; // Исправленный импорт
-import 'favorites_screen.dart';
-import 'farms_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/favorites_screen.dart';
+import 'screens/farms_screen.dart';
 
 // --- Навигация ---
 final GoRouter router = GoRouter(
@@ -11,7 +11,7 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/',
       builder: (BuildContext context, GoRouterState state) {
-        return const AuctionHouseScreen();
+        return const HomeScreen();
       },
     ),
     GoRoute(

@@ -1,21 +1,69 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 import '../blizzard_api_service.dart';
 import '../models/auction_item.dart';
 import '../app_router.dart';
 
-class AuctionHouseScreen extends StatefulWidget {
-  const AuctionHouseScreen({super.key});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<AuctionHouseScreen> createState() => _AuctionHouseScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _AuctionHouseScreenState extends State<AuctionHouseScreen> {
+class _HomeScreenState extends State<HomeScreen> {
   List<AuctionItem> _items = [];
   bool _isLoading = false;
   String _searchQuery = '';
+  bool _isTokenPriceLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAndStoreTokenPrice();
+  }
+
+  Future<void> _fetchAndStoreTokenPrice() async {
+    if (!mounted) return;
+    setState(() => _isTokenPriceLoading = true);
+
+    try {
+      final price = await BlizzardApiService().fetchWowTokenPrice();
+      final docRef = FirebaseFirestore.instance.collection('settings').doc('wow_token_price');
+
+      final now = DateTime.now().toUtc();
+      final timestampKey = DateFormat("yyyy-MM-dd HH").format(now);
+
+      await docRef.set({
+        'prices': {timestampKey: price}
+      }, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Цена жетона успешно обновлена!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при обновлении цены жетона: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isTokenPriceLoading = false);
+      }
+    }
+  }
 
   Future<void> _searchItems(String query) async {
     setState(() {
@@ -41,13 +89,12 @@ class _AuctionHouseScreenState extends State<AuctionHouseScreen> {
           .where(
             'name',
             isLessThanOrEqualTo: '$query\uf8ff',
-          ) // Correct Firestore prefix search
+          )
           .limit(50)
           .get();
 
-      final items = snapshot.docs
-          .map((doc) => AuctionItem.fromFirestore(doc))
-          .toList();
+      final items =
+          snapshot.docs.map((doc) => AuctionItem.fromFirestore(doc)).toList();
       setState(() {
         _items = items;
         _isLoading = false;
@@ -57,9 +104,8 @@ class _AuctionHouseScreenState extends State<AuctionHouseScreen> {
         _isLoading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Ошибка поиска: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка поиска: $e')));
       }
     }
   }
@@ -70,7 +116,7 @@ class _AuctionHouseScreenState extends State<AuctionHouseScreen> {
       appBar: CustomAppBar(onSearchChanged: _searchItems),
       body: Row(
         children: [
-          const CategoryPanel(),
+          CategoryPanel(isTokenLoading: _isTokenPriceLoading),
           const VerticalDivider(width: 2, thickness: 2, color: Colors.black),
           Expanded(
             child: AuctionListPanel(
@@ -113,10 +159,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
                 SizedBox(height: 10),
                 Text(
                   'Загрузка может занять несколько минут.',
-                  style: TextStyle(
-                    fontStyle: FontStyle.italic,
-                    color: Colors.grey,
-                  ),
+                  style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
                 ),
               ],
             ),
@@ -124,9 +167,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
           actions: <Widget>[
             TextButton(
               child: const Text('Отмена'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              onPressed: () => Navigator.of(context).pop(),
             ),
             ElevatedButton(
               child: const Text('Загрузить'),
@@ -145,9 +186,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
     setState(() => _isBlizzardLoading = true);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Загрузка данных с Blizzard API началась...'),
-        ),
+        const SnackBar(content: Text('Загрузка данных с Blizzard API началась...')),
       );
     }
 
@@ -187,6 +226,13 @@ class _CustomAppBarState extends State<CustomAppBar> {
 
   @override
   Widget build(BuildContext context) {
+    final buttonStyle = ElevatedButton.styleFrom(
+      backgroundColor: const Color(0xFF1E3A8A),
+      foregroundColor: Colors.white,
+      side: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    );
+
     return AppBar(
       automaticallyImplyLeading: false,
       titleSpacing: 0,
@@ -196,21 +242,16 @@ class _CustomAppBarState extends State<CustomAppBar> {
           children: [
             TextButton(
               onPressed: () => router.go('/favorites'),
-              child: const Text(
-                'Избранное',
-                style: TextStyle(color: Color(0xFFD4BF7A), fontSize: 16),
-              ),
+              child: const Text('Избранное', style: TextStyle(color: Color(0xFFD4BF7A), fontSize: 16)),
             ),
             const SizedBox(width: 20),
             TextButton(
               onPressed: () => router.go('/farms'),
-              child: const Text(
-                'Фармы',
-                style: TextStyle(color: Color(0xFFD4BF7A), fontSize: 16),
-              ),
+              child: const Text('Фармы', style: TextStyle(color: Color(0xFFD4BF7A), fontSize: 16)),
             ),
-            const SizedBox(width: 20),
+            const Spacer(),
             Expanded(
+              flex: 2,
               child: Container(
                 height: 40,
                 decoration: BoxDecoration(
@@ -232,24 +273,13 @@ class _CustomAppBarState extends State<CustomAppBar> {
             ),
             const SizedBox(width: 20),
             if (_isBlizzardLoading)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0),
-                child: CircularProgressIndicator(),
-              )
+              const CircularProgressIndicator()
             else
               ElevatedButton.icon(
                 onPressed: _showConfirmationDialog,
                 icon: const Icon(Icons.cloud_download, size: 18),
                 label: const Text('Загрузить предметы'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E3A8A),
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 16,
-                  ),
-                ),
+                style: buttonStyle,
               ),
           ],
         ),
@@ -259,19 +289,90 @@ class _CustomAppBarState extends State<CustomAppBar> {
 }
 
 class CategoryPanel extends StatelessWidget {
-  const CategoryPanel({super.key});
+  final bool isTokenLoading;
+  const CategoryPanel({super.key, required this.isTokenLoading});
+
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     return Container(
       width: 250,
       color: Theme.of(context).cardColor,
-      padding: const EdgeInsets.all(12.0),
-      child: const Center(
-        child: Text(
-          'Категории\n(скоро будут)',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey),
-        ),
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Жетон WoW', style: textTheme.titleMedium),
+          const SizedBox(height: 12),
+          if (isTokenLoading)
+            const Center(child: CircularProgressIndicator())
+          else
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('settings')
+                  .doc('wow_token_price')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return const Text('Цена жетона не найдена.', style: TextStyle(color: Colors.grey));
+                }
+                
+                final docData = snapshot.data!.data() as Map<String, dynamic>?;
+                final prices = docData?['prices'] as Map<String, dynamic>?;
+
+                if (prices == null || prices.isEmpty) {
+                  return const Text('Нет данных о цене жетона.', style: TextStyle(color: Colors.grey));
+                }
+                
+                final sortedKeys = prices.keys.toList()..sort();
+                final latestTimestampKey = sortedKeys.last;
+                final latestPrice = prices[latestTimestampKey];
+
+                final formattedPrice = NumberFormat("#,##0", "en_US").format(latestPrice);
+
+                // Prepare data for the chart
+                final List<FlSpot> spots = [];
+                for (var i = 0; i < sortedKeys.length; i++) {
+                  final key = sortedKeys[i];
+                  final price = prices[key];
+                  spots.add(FlSpot(i.toDouble(), price.toDouble()));
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('$formattedPrice g', style: textTheme.bodyLarge?.copyWith(fontSize: 20, color: Colors.amber)),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 150,
+                      child: LineChart(
+                        LineChartData(
+                          gridData: FlGridData(show: false),
+                          titlesData: FlTitlesData(show: false),
+                          borderData: FlBorderData(show: false),
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: spots,
+                              isCurved: true,
+                              color: Colors.amber,
+                              barWidth: 3,
+                              isStrokeCapRound: true,
+                              dotData: FlDotData(show: false),
+                              belowBarData: BarAreaData(show: false),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+        ],
       ),
     );
   }
@@ -300,15 +401,12 @@ class AuctionListPanel extends StatelessWidget {
           const Divider(color: Colors.grey),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('favorites')
-                  .snapshots(),
+              stream: FirebaseFirestore.instance.collection('favorites').snapshots(),
               builder: (context, favSnapshot) {
                 if (favSnapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final favoriteIds =
-                    favSnapshot.data?.docs.map((doc) => doc.id).toSet() ?? {};
+                final favoriteIds = favSnapshot.data?.docs.map((doc) => doc.id).toSet() ?? {};
 
                 if (isLoading) {
                   return const Center(child: CircularProgressIndicator());
@@ -316,9 +414,7 @@ class AuctionListPanel extends StatelessWidget {
 
                 if (searchQuery.length < 3) {
                   return const Center(
-                    child: Text(
-                      'Введите 3 или более символов для начала поиска.',
-                    ),
+                    child: Text('Введите 3 или более символов для начала поиска.'),
                   );
                 }
 
@@ -330,15 +426,10 @@ class AuctionListPanel extends StatelessWidget {
                   itemCount: items.length,
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    final isFavorited = favoriteIds.contains(
-                      item.id.toString(),
-                    );
+                    final isFavorited = favoriteIds.contains(item.id.toString());
 
                     return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0,
-                        vertical: 10.0,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
                       child: Row(
                         key: ValueKey(item.id),
                         children: [
@@ -346,10 +437,7 @@ class AuctionListPanel extends StatelessWidget {
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              border: Border.all(
-                                color: const Color(0xFFD4BF7A),
-                                width: 1.5,
-                              ),
+                              border: Border.all(color: const Color(0xFFD4BF7A), width: 1.5),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: item.iconUrl != null
@@ -358,50 +446,32 @@ class AuctionListPanel extends StatelessWidget {
                                     child: Image.network(
                                       item.iconUrl!,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (c, e, s) =>
-                                          const Icon(Icons.error, size: 20),
+                                      errorBuilder: (c, e, s) => const Icon(Icons.error, size: 20),
                                     ),
                                   )
                                 : const Icon(Icons.inventory_2, size: 20),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: Text(
-                              item.name,
-                              style: Theme.of(context).textTheme.bodyLarge,
-                            ),
+                            child: Text(item.name, style: Theme.of(context).textTheme.bodyLarge),
                           ),
                           GestureDetector(
-                            onTap: () =>
-                                _toggleFavorite(context, item, isFavorited),
+                            onTap: () => _toggleFavorite(context, item, isFavorited),
                             child: Container(
                               width: 40,
                               height: 40,
                               color: Colors.transparent,
                               alignment: Alignment.center,
                               child: Tooltip(
-                                message: isFavorited
-                                    ? 'Удалить из избранного'
-                                    : 'Добавить в избранное',
+                                message: isFavorited ? 'Удалить из избранного' : 'Добавить в избранное',
                                 child: AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 300),
-                                  transitionBuilder:
-                                      (
-                                        Widget child,
-                                        Animation<double> animation,
-                                      ) {
-                                        return FadeTransition(
-                                          opacity: animation,
-                                          child: child,
-                                        );
-                                      },
+                                  transitionBuilder: (Widget child, Animation<double> animation) {
+                                    return FadeTransition(opacity: animation, child: child);
+                                  },
                                   child: Icon(
-                                    isFavorited
-                                        ? Icons.star
-                                        : Icons.star_border,
-                                    color: isFavorited
-                                        ? const Color(0xFFFFC700)
-                                        : const Color(0xFFD4BF7A),
+                                    isFavorited ? Icons.star : Icons.star_border,
+                                    color: isFavorited ? const Color(0xFFFFC700) : const Color(0xFFD4BF7A),
                                     size: 24,
                                     key: ValueKey<bool>(isFavorited),
                                   ),
@@ -422,11 +492,7 @@ class AuctionListPanel extends StatelessWidget {
     );
   }
 
-  void _toggleFavorite(
-    BuildContext context,
-    AuctionItem item,
-    bool isFavorited,
-  ) {
+  void _toggleFavorite(BuildContext context, AuctionItem item, bool isFavorited) {
     final collection = FirebaseFirestore.instance.collection('favorites');
     final docId = item.id.toString();
 
@@ -436,15 +502,11 @@ class AuctionListPanel extends StatelessWidget {
         builder: (BuildContext context) {
           return AlertDialog(
             title: const Text('Подтверждение'),
-            content: Text(
-              'Вы уверены, что хотите удалить "${item.name}" из избранного?',
-            ),
+            content: Text('Вы уверены, что хотите удалить "${item.name}" из избранного?'),
             actions: <Widget>[
               TextButton(
                 child: const Text('Отмена'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
+                onPressed: () => Navigator.of(context).pop(),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -468,12 +530,7 @@ class AuctionListPanel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              'Название предмета',
-              style: theme.textTheme.titleMedium,
-            ),
-          ),
+          Expanded(child: Text('Название предмета', style: theme.textTheme.titleMedium)),
           const SizedBox(width: 40), // For the star icon
         ],
       ),

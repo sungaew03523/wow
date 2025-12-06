@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import 'blizzard_api_service.dart';
-import 'models/auction_item.dart';
+import '../blizzard_api_service.dart';
+import '../models/auction_item.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});

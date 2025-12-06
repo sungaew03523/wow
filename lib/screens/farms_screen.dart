@@ -4,8 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'package:function_tree/function_tree.dart';
 
-import 'blizzard_api_service.dart';
-import 'models/auction_item.dart';
+import '../blizzard_api_service.dart';
+import '../models/auction_item.dart';
 
 // --- Модель данных для фарма ---
 class Farm {
