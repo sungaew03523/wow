@@ -234,16 +234,9 @@ class BlizzardApiService {
         final history = (data['averagePriceHistory'] as Map<String, dynamic>?) ?? {};
 
         final now = DateTime.now();
-        final formatter = DateFormat('yyyy-MM-dd HH');
+        final formatter = DateFormat('yyyy-MM-dd HH:mm:ss');
         final timestampKey = formatter.format(now);
         history[timestampKey] = weightedAveragePrice;
-
-        const maxHistoryLength = 24;
-        if (history.length > maxHistoryLength) {
-          final sortedKeys = history.keys.toList()..sort();
-          final keysToRemove = sortedKeys.take(history.length - maxHistoryLength);
-          for (final key in keysToRemove) history.remove(key);
-        }
 
         transaction.update(docRef, {
           'minimalCost': minimalCost,

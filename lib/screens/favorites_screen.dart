@@ -18,9 +18,30 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   bool _isPriceUpdating = false;
   bool _isRenaming = false;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  Timer? _timer;
 
   final Stream<QuerySnapshot> _favoritesStream =
       FirebaseFirestore.instance.collection('favorites').orderBy('name').snapshots();
+
+  @override
+  void initState() {
+    super.initState();
+    // Start the timer to update prices every hour
+    _timer = Timer.periodic(const Duration(hours: 1), (timer) {
+      _updateFavoritePrices();
+    });
+    // Also update prices once immediately when the screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateFavoritePrices();
+    });
+  }
+
+  @override
+  void dispose() {
+    // Cancel the timer when the screen is disposed
+    _timer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _updateFavoritePrices() async {
     if (_isPriceUpdating) return;
@@ -241,7 +262,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           const SizedBox(width: 52), // Icon + padding
           Expanded(flex: 2, child: Text('Название', style: theme.textTheme.titleMedium)),
           SizedBox(width: 100, child: Text('Объем', style: theme.textTheme.titleMedium, textAlign: TextAlign.center)),
-          Expanded(flex: 3, child: Center(child: Text('График за 30 дней', style: theme.textTheme.titleMedium))),
+          Expanded(flex: 3, child: Center(child: Text('График цен', style: theme.textTheme.titleMedium))),
           SizedBox(width: 120, child: Text('Средняя цена', style: theme.textTheme.titleMedium, textAlign: TextAlign.right)),
           const SizedBox(width: 40), // Star icon
         ],
@@ -375,29 +396,19 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       return Center(child: Text('-', style: TextStyle(color: Colors.grey[600])));
     }
 
-    final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
-    final filteredHistory = Map.fromEntries(history.entries.where((entry) {
-      try {
-        final entryDate = DateTime.parse(entry.key);
-        return entryDate.isAfter(thirtyDaysAgo);
-      } catch (e) {
-        return false;
-      }
-    }));
-
-    if (filteredHistory.isEmpty) {
-      return Center(child: Text('Нет данных за 30 дней', style: TextStyle(color: Colors.grey[600])));
+    if (history.isEmpty) {
+      return Center(child: Text('Нет данных', style: TextStyle(color: Colors.grey[600])));
     }
 
     List<FlSpot> spots = [];
-    final sortedKeys = filteredHistory.keys.toList()..sort();
+    final sortedKeys = history.keys.toList()..sort();
 
     double minY = double.maxFinite;
     double maxY = double.minPositive;
 
     for (var i = 0; i < sortedKeys.length; i++) {
       final key = sortedKeys[i];
-      final value = filteredHistory[key];
+      final value = history[key];
       if (value != null) {
         final doubleValue = value.toDouble();
         spots.add(FlSpot(i.toDouble(), doubleValue));
