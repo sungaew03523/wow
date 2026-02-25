@@ -234,7 +234,7 @@ class BlizzardApiService {
         final history = (data['averagePriceHistory'] as Map<String, dynamic>?) ?? {};
 
         final now = DateTime.now();
-        final formatter = DateFormat('yyyy-MM-dd HH:mm:ss');
+        final formatter = DateFormat('yyyy-MM-dd HH');
         final timestampKey = formatter.format(now);
         history[timestampKey] = weightedAveragePrice;
 
