@@ -16,7 +16,7 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
   bool _isPriceUpdating = false;
-  bool _isCalculatingVolumes = false; // Состояние для новой кнопки
+  bool _isCalculatingVolumes = false;
   bool _isRenaming = false;
   bool _isClearingHistory = false;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -314,58 +314,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     }
   }
 
-  Future<void> _clearSingleItemHistory(BuildContext context, AuctionItem item) async {
-    if (!mounted) return;
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Подтверждение'),
-          content: Text('Вы уверены, что хотите удалить историю цен для "${item.name}"?'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Отмена'),
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Удалить'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) {
-      return;
-    }
-
-    try {
-      await _firestore
-          .collection('favorites')
-          .doc(item.id.toString())
-          .update({'averagePriceHistory': {}});
-
-      if (!mounted) return;
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-            content: Text('История цен для "${item.name}" очищена.'),
-            backgroundColor: Colors.green),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-            content: Text('Ошибка при очистке истории для "${item.name}": $e'),
-            backgroundColor: Colors.red),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -406,7 +354,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     itemBuilder: (context, index) {
                       final item =
                           AuctionItem.fromFirestore(favoriteDocs[index]);
-                      return _buildItemRow(context, item, true, index);
+                      return FavoriteItemRow(item: item, key: ValueKey(item.id));
                     },
                   );
                 },
@@ -443,7 +391,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               : const Icon(Icons.refresh, size: 20),
           label: const Text('Обновить все цены'),
         ),
-        // --- Новая кнопка ---
         ElevatedButton.icon(
           style: buttonStyle,
           onPressed: _isCalculatingVolumes ? null : _calculateAndSetVolumes,
@@ -455,7 +402,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               : const Icon(Icons.calculate_outlined, size: 20),
           label: const Text('Рассчитать объемы'),
         ),
-        // -------------------
         ElevatedButton.icon(
           style: buttonStyle,
           onPressed: _isClearingHistory ? null : _clearPriceHistory,
@@ -496,8 +442,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               child: Center(
                   child: Text('График цен', style: theme.textTheme.titleMedium))),
           SizedBox(
-              width: 120,
-              child: Text('Средняя цена',
+            width: 150,
+            child: Text('Инвестиции', 
+                style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
+          ),
+          SizedBox(
+              width: 90,
+              child: Text('Цена',
                   style: theme.textTheme.titleMedium, textAlign: TextAlign.right)),
           SizedBox(
               width: 90,
@@ -508,16 +459,29 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       ),
     );
   }
+}
 
-  Widget _buildItemRow(
-      BuildContext context, AuctionItem item, bool isFavorited, int index) {
+
+class FavoriteItemRow extends StatefulWidget {
+  final AuctionItem item;
+
+  const FavoriteItemRow({required this.item, super.key});
+
+  @override
+  State<FavoriteItemRow> createState() => _FavoriteItemRowState();
+}
+
+class _FavoriteItemRowState extends State<FavoriteItemRow> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4.0),
       elevation: 1,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
         child: Row(
-          key: ValueKey(item.id),
           children: [
             Container(
               width: 36,
@@ -526,10 +490,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 border: Border.all(color: const Color(0xFFD4BF7A), width: 1.5),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: item.iconUrl != null
+              child: widget.item.iconUrl != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(3.0),
-                      child: Image.network(item.iconUrl!,
+                      child: Image.network(widget.item.iconUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (c, e, s) =>
                               const Icon(Icons.error, size: 20)),
@@ -539,15 +503,15 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             const SizedBox(width: 16),
             Expanded(
                 flex: 2,
-                child: Text(item.name, style: Theme.of(context).textTheme.bodyLarge)),
+                child: Text(widget.item.name, style: Theme.of(context).textTheme.bodyLarge)),
             SizedBox(
               width: 100,
               child: InkWell(
-                onTap: () => _showEditVolumeDialog(context, item),
+                onTap: () => _showEditVolumeDialog(context, widget.item),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(item.analysisVolume.toString(),
+                    Text(widget.item.analysisVolume.toString(),
                         style: Theme.of(context).textTheme.bodyLarge),
                     const SizedBox(width: 8),
                     const Icon(Icons.edit, size: 16, color: Colors.grey),
@@ -555,10 +519,24 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 ),
               ),
             ),
-            Expanded(flex: 3, child: _buildPriceHistoryChart(item, index)),
+            Expanded(flex: 3, child: _buildPriceHistoryChart(widget.item)),
             SizedBox(
-                width: 120,
-                child: Text(item.weightedAveragePrice?.toStringAsFixed(2) ?? '-',
+              width: 150,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.add_shopping_cart),
+                    tooltip: 'Добавить/Изменить покупку',
+                    onPressed: () => _showAddInvestmentDialog(context, widget.item),
+                  ),
+                  _buildProfitDisplay(widget.item),
+                ],
+              ),
+            ),
+            SizedBox(
+                width: 90,
+                child: Text(widget.item.weightedAveragePrice?.toStringAsFixed(2) ?? '-',
                     textAlign: TextAlign.right)),
             SizedBox(
               width: 90,
@@ -571,25 +549,21 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       padding: const EdgeInsets.all(8),
                       constraints: const BoxConstraints(),
                       icon: const Icon(Icons.history_toggle_off_outlined),
-                      onPressed: () => _clearSingleItemHistory(context, item),
+                      onPressed: () => _clearSingleItemHistory(context, widget.item),
                       color: Colors.grey[400],
                       iconSize: 20,
                       splashRadius: 18,
                     ),
                   ),
                   Tooltip(
-                    message: isFavorited
-                        ? 'Удалить из избранного'
-                        : 'Добавить в избранное',
+                    message: 'Удалить из избранного',
                     child: IconButton(
                       padding: const EdgeInsets.all(8),
                       constraints: const BoxConstraints(),
-                      icon: Icon(isFavorited ? Icons.star : Icons.star_border),
+                      icon: const Icon(Icons.star),
                       onPressed: () =>
-                          _toggleFavorite(context, item, isFavorited),
-                      color: isFavorited
-                          ? const Color(0xFFFFC700)
-                          : const Color(0xFFD4BF7A),
+                          _toggleFavorite(context, widget.item, true),
+                      color: const Color(0xFFFFC700),
                       iconSize: 22,
                       splashRadius: 18,
                     ),
@@ -600,6 +574,178 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _showAddInvestmentDialog(BuildContext context, AuctionItem item) async {
+    final investmentQuery = _firestore
+        .collection('investments')
+        .where('itemId', isEqualTo: item.id.toString());
+
+    final existingInvestments = await investmentQuery.get();
+
+    int totalQuantity = 0;
+    double totalCost = 0;
+    if (existingInvestments.docs.isNotEmpty) {
+      for (var doc in existingInvestments.docs) {
+        final data = doc.data();
+        totalQuantity += (data['quantity'] as int?) ?? 0;
+        final price = (data['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+        final qty = (data['quantity'] as int?) ?? 0;
+        totalCost += price * qty;
+      }
+    }
+
+    final averagePrice = totalQuantity > 0 ? totalCost / totalQuantity : 0.0;
+
+    final quantityController = TextEditingController(text: totalQuantity > 0 ? totalQuantity.toString() : '');
+    final priceController = TextEditingController(text: averagePrice > 0 ? averagePrice.toStringAsFixed(2) : '');
+    final formKey = GlobalKey<FormState>();
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Инвестиция в "${item.name}"'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: quantityController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Общее количество'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty || int.tryParse(value) == null || int.parse(value) < 0) {
+                      return 'Введите корректное число';
+                    }
+                    return null;
+                  },
+                ),
+                TextFormField(
+                  controller: priceController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Средняя цена закупки (за шт.)'),
+                   validator: (value) {
+                    if (value == null || value.isEmpty || double.tryParse(value) == null || double.parse(value) < 0) {
+                      return 'Введите корректную цену';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Отмена'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (formKey.currentState!.validate()) {
+                  final quantity = int.parse(quantityController.text);
+                  final price = double.parse(priceController.text);
+
+                  final batch = _firestore.batch();
+
+                  for (var doc in existingInvestments.docs) {
+                    batch.delete(doc.reference);
+                  }
+
+                  if (quantity > 0) {
+                    batch.set(_firestore.collection('investments').doc(), {
+                      'itemId': item.id.toString(),
+                      'quantity': quantity,
+                      'purchasePrice': price,
+                      'timestamp': Timestamp.now(),
+                    });
+                  }
+
+                  await batch.commit();
+                  
+                  if(mounted) {
+                    Navigator.of(context).pop();
+                     ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                          content: Text(quantity > 0 ? 'Инвестиция успешно сохранена!' : 'Инвестиция удалена.'),
+                          backgroundColor: Colors.green),
+                    );
+                  }
+                }
+              },
+              child: const Text('Сохранить'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildProfitDisplay(AuctionItem item) {
+    final Stream<QuerySnapshot> investmentStream = _firestore
+        .collection('investments')
+        .where('itemId', isEqualTo: item.id.toString())
+        .snapshots();
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: investmentStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Text('0 g', style: Theme.of(context).textTheme.bodyLarge);
+        }
+        if (snapshot.hasError) {
+          return const Tooltip(message: "Ошибка", child: Icon(Icons.error_outline, color: Colors.red, size: 18));
+        }
+
+        int totalQuantity = 0;
+        double totalCost = 0;
+
+        for (var doc in snapshot.data!.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          totalQuantity += (data['quantity'] as int?) ?? 0;
+          final price = (data['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+          final qty = (data['quantity'] as int?) ?? 0;
+          totalCost += price * qty;
+        }
+        
+        final currentWeightedPrice = item.weightedAveragePrice;
+        if (currentWeightedPrice == null || totalQuantity == 0) {
+          return Text('0 g', style: Theme.of(context).textTheme.bodyLarge);
+        }
+
+        final currentValue = (currentWeightedPrice * totalQuantity) * 0.95; // -5% commission
+        final profit = currentValue - totalCost;
+        
+        final profitColor = profit >= 0 ? Colors.greenAccent : Colors.redAccent;
+        final profitSign = profit > 0 ? '+' : '';
+
+        return Tooltip(
+          message: 'Всего куплено: $totalQuantity шт.\nСредняя цена покупки: ${(totalCost / totalQuantity).toStringAsFixed(2)} g',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+               Text(
+                '${totalCost.toStringAsFixed(0)} g',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.amber, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '$profitSign${profit.toStringAsFixed(0)} g',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: profitColor, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          )
+        );
+      },
     );
   }
 
@@ -649,7 +795,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  Widget _buildPriceHistoryChart(AuctionItem item, int index) {
+  Widget _buildPriceHistoryChart(AuctionItem item) {
     final history = item.averagePriceHistory;
     if (history == null || history.isEmpty) {
       return Center(child: Text('-', style: TextStyle(color: Colors.grey[600])));
@@ -736,6 +882,56 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
+  Future<void> _clearSingleItemHistory(BuildContext context, AuctionItem item) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Подтверждение'),
+          content: Text('Вы уверены, что хотите удалить историю цен для "${item.name}"?'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Отмена'),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Удалить'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await _firestore
+          .collection('favorites')
+          .doc(item.id.toString())
+          .update({'averagePriceHistory': {}});
+
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+            content: Text('История цен для "${item.name}" очищена.'),
+            backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+            content: Text('Ошибка при очистке истории для "${item.name}": $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
   void _toggleFavorite(
       BuildContext context, AuctionItem item, bool isFavorited) {
     final collection = FirebaseFirestore.instance.collection('favorites');
@@ -765,8 +961,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           );
         },
       );
-    } else {
-      collection.doc(docId).set(item.toFirestore());
     }
   }
 }
