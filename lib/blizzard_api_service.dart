@@ -141,6 +141,38 @@ class BlizzardApiService {
     return items;
   }
 
+  Future<Map<String, int>> getAuctionQuantities(List<String> itemIds) async {
+    if (itemIds.isEmpty) return {};
+
+    final token = await _getAccessToken();
+    final Map<String, int> itemQuantities = { for (var id in itemIds) id : 0 };
+
+    Uri? nextUri = Uri.https(
+        '${WowApiConfig.region}.api.blizzard.com',
+        '/data/wow/auctions/commodities',
+        {'namespace': WowApiConfig.namespace, 'locale': WowApiConfig.locale});
+
+    while (nextUri != null) {
+      final response = await _client.get(_addCacheBust(nextUri), headers: {'Authorization': 'Bearer $token'});
+      if (response.statusCode != 200) throw Exception('Ошибка commodities: ${response.body}');
+      
+      final data = jsonDecode(response.body);
+      final auctions = (data['auctions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+      for (var auction in auctions) {
+        final itemId = auction['item']?['id']?.toString();
+        if (itemId != null && itemQuantities.containsKey(itemId)) {
+          final quantity = auction['quantity'] as int? ?? 0;
+          itemQuantities[itemId] = (itemQuantities[itemId] ?? 0) + quantity;
+        }
+      }
+      final nextLink = data['_links']?['next']?['href'] as String?;
+      nextUri = nextLink != null ? Uri.parse(nextLink) : null;
+    }
+    
+    return itemQuantities;
+  }
+
   Future<void> fetchReagentPrices(Map<String, int> itemsToUpdate) async {
     if (itemsToUpdate.isEmpty) return;
 

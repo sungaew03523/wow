@@ -16,9 +16,11 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
   bool _isPriceUpdating = false;
+  bool _isCalculatingVolumes = false; // Состояние для новой кнопки
   bool _isRenaming = false;
-  bool _isClearingHistory = false; // State for the new button
+  bool _isClearingHistory = false;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final BlizzardApiService _apiService = BlizzardApiService();
   Timer? _timer;
 
   final Stream<QuerySnapshot> _favoritesStream =
@@ -41,6 +43,70 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     super.dispose();
   }
 
+  Future<void> _calculateAndSetVolumes() async {
+    if (_isCalculatingVolumes) return;
+    setState(() => _isCalculatingVolumes = true);
+
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    scaffoldMessenger.showSnackBar(
+      const SnackBar(content: Text('Начинаем расчет объемов...')),
+    );
+
+    try {
+      final favoritesSnapshot = await _firestore.collection('favorites').get();
+      if (favoritesSnapshot.docs.isEmpty) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('Нет избранных предметов для расчета.'), backgroundColor: Colors.orange),
+        );
+        setState(() => _isCalculatingVolumes = false);
+        return;
+      }
+
+      final itemIds = favoritesSnapshot.docs.map((doc) => doc.id).toList();
+      final itemQuantities = await _apiService.getAuctionQuantities(itemIds);
+
+      final WriteBatch batch = _firestore.batch();
+
+      for (var doc in favoritesSnapshot.docs) {
+        final totalQuantity = itemQuantities[doc.id] ?? 0;
+        int newVolume;
+
+        if (totalQuantity > 10000) {
+          newVolume = 1000;
+        } else if (totalQuantity > 5000) {
+          newVolume = 500;
+        } else if (totalQuantity > 1000) {
+          newVolume = 100;
+        } else if (totalQuantity > 500) {
+          newVolume = 50;
+        } else if (totalQuantity > 100) {
+          newVolume = 10;
+        } else {
+          newVolume = 5;
+        }
+
+        batch.update(doc.reference, {'analysisVolume': newVolume});
+      }
+
+      await batch.commit();
+
+       scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('Объемы успешно рассчитаны и обновлены!'), backgroundColor: Colors.green),
+      );
+
+    } catch (e) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(content: Text('Ошибка при расчете объемов: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCalculatingVolumes = false);
+      }
+    }
+  }
+
+
   Future<void> _updateFavoritePrices() async {
     if (_isPriceUpdating) return;
     setState(() => _isPriceUpdating = true);
@@ -57,7 +123,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       final Map<String, int> itemsToUpdate = {
         for (var doc in favoritesSnapshot.docs)
           doc.id:
-              (doc.data()['analysisVolume'] ?? 1000)
+              ((doc.data())['analysisVolume'] ?? 1000)
       };
 
       if (itemsToUpdate.isEmpty) {
@@ -71,7 +137,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         return;
       }
 
-      await BlizzardApiService().fetchReagentPrices(itemsToUpdate);
+      await _apiService.fetchReagentPrices(itemsToUpdate);
 
       if (!mounted) return;
       scaffoldMessenger.showSnackBar(
@@ -377,6 +443,19 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               : const Icon(Icons.refresh, size: 20),
           label: const Text('Обновить все цены'),
         ),
+        // --- Новая кнопка ---
+        ElevatedButton.icon(
+          style: buttonStyle,
+          onPressed: _isCalculatingVolumes ? null : _calculateAndSetVolumes,
+          icon: _isCalculatingVolumes
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 3))
+              : const Icon(Icons.calculate_outlined, size: 20),
+          label: const Text('Рассчитать объемы'),
+        ),
+        // -------------------
         ElevatedButton.icon(
           style: buttonStyle,
           onPressed: _isClearingHistory ? null : _clearPriceHistory,
@@ -553,11 +632,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       .update({'analysisVolume': newVolume});
                   Navigator.of(context).pop();
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Введите корректное число.'),
-                        backgroundColor: Colors.red),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Введите корректное число.'),
+                          backgroundColor: Colors.red),
+                    );
+                  } 
                 }
               },
               child: const Text('Сохранить'),
