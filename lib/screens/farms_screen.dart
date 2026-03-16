@@ -398,61 +398,57 @@ class _FarmsScreenState extends State<FarmsScreen> {
 
   Future<void> _handleFullUpdate() async {
     setState(() => _isPriceUpdating = true);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Обновление цен началось...'),
-          backgroundColor: Colors.blue,
-        ),
-      );
-    }
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    scaffoldMessenger.showSnackBar(
+      const SnackBar(
+        content: Text('Обновление цен началось...'),
+        backgroundColor: Colors.blue,
+      ),
+    );
 
     try {
       final favoritesSnapshot = await _firestore.collection('favorites').get();
-      final Map<String, int> itemsToUpdate = {
+      final itemsToUpdate = {
         for (var doc in favoritesSnapshot.docs)
-          doc.id: ((doc.data() as Map<String, dynamic>)['analysisVolume'] ?? 1000) as int
+          doc.id: (doc.data()['analysisVolume'] ?? 1000) as int,
       };
 
       if (itemsToUpdate.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Нет избранных предметов для обновления.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        setState(() => _isPriceUpdating = false);
-        return;
-      }
-
-      await BlizzardApiService().fetchReagentPrices(itemsToUpdate);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        if (!mounted) return;
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Нет избранных предметов для обновления.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        await BlizzardApiService().fetchReagentPrices(itemsToUpdate);
+        if (!mounted) return;
+        scaffoldMessenger.showSnackBar(
           const SnackBar(
             content: Text('Цены успешно обновлены!'),
             backgroundColor: Colors.green,
           ),
         );
       }
-      _refreshFarms();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка при обновлении цен: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при обновлении цен: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
       if (mounted) {
-        setState(() => _isPriceUpdating = false);
+        setState(() {
+          _isPriceUpdating = false;
+        });
+        _refreshFarms();
       }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -462,7 +458,7 @@ class _FarmsScreenState extends State<FarmsScreen> {
       padding: const EdgeInsets.symmetric(
         horizontal: 16,
         vertical: 12,
-      ), // Уменьшенный padding для AppBar
+      ),
       textStyle: const TextStyle(fontSize: 14),
     );
 
@@ -596,7 +592,12 @@ class _FarmsScreenState extends State<FarmsScreen> {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const Divider(),
-                      FarmProfitCalculator(formula: farm.formula),
+                      FarmComponentsList(formula: farm.formula),
+                      const Divider(),
+                      FarmProfitCalculator(
+                        formula: farm.formula,
+                        craftsCount: farm.craftsCount,
+                      ),
                     ],
                   ),
                 ),
@@ -614,11 +615,16 @@ class _FarmsScreenState extends State<FarmsScreen> {
   }
 }
 
-// --- Виджет для расчета и отображения прибыли ---
+// --- Виджет для расчета прибыли ---
 class FarmProfitCalculator extends StatefulWidget {
   final String formula;
+  final int craftsCount;
 
-  const FarmProfitCalculator({super.key, required this.formula});
+  const FarmProfitCalculator({
+    super.key,
+    required this.formula,
+    required this.craftsCount,
+  });
 
   @override
   State<FarmProfitCalculator> createState() => _FarmProfitCalculatorState();
@@ -626,7 +632,6 @@ class FarmProfitCalculator extends StatefulWidget {
 
 class _FarmProfitCalculatorState extends State<FarmProfitCalculator> {
   late Future<double> _profitFuture;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
@@ -637,10 +642,32 @@ class _FarmProfitCalculatorState extends State<FarmProfitCalculator> {
   @override
   void didUpdateWidget(covariant FarmProfitCalculator oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.formula != widget.formula) {
+    if (oldWidget.formula != widget.formula ||
+        oldWidget.craftsCount != widget.craftsCount) {
       setState(() {
         _profitFuture = _calculateProfit();
       });
+    }
+  }
+
+  Future<double> _calculateProfit() async {
+    if (widget.formula.isEmpty) return 0.0;
+
+    final itemNames = _extractItemNames(widget.formula);
+    final itemPrices = await _getItemPricesFromFirestore(itemNames);
+
+    String formulaWithPrices = widget.formula;
+    for (String name in itemNames) {
+      formulaWithPrices =
+          formulaWithPrices.replaceAll('"$name"', itemPrices[name]?.toString() ?? '0');
+    }
+
+    try {
+      final profitPerCraft = formulaWithPrices.interpret().toDouble();
+      return profitPerCraft; 
+    } catch (e) {
+      throw Exception(
+          'Ошибка при вычислении формулы: $e. Обработанная формула: $formulaWithPrices');
     }
   }
 
@@ -650,20 +677,16 @@ class _FarmProfitCalculatorState extends State<FarmProfitCalculator> {
   }
 
   Future<Map<String, double>> _getItemPricesFromFirestore(
-    Set<String> itemNames,
-  ) async {
-    if (itemNames.isEmpty) {
-      return {};
-    }
+      Set<String> itemNames) async {
+    if (itemNames.isEmpty) return {};
 
     final Map<String, double> prices = {};
-    final List<String> namesList = itemNames.toList();
+    final namesList = itemNames.toList();
+
     for (var i = 0; i < namesList.length; i += 30) {
       final chunk = namesList.sublist(
-        i,
-        i + 30 > namesList.length ? namesList.length : i + 30,
-      );
-      final querySnapshot = await _firestore
+          i, i + 30 > namesList.length ? namesList.length : i + 30);
+      final querySnapshot = await FirebaseFirestore.instance
           .collection('favorites')
           .where('name', whereIn: chunk)
           .get();
@@ -671,7 +694,6 @@ class _FarmProfitCalculatorState extends State<FarmProfitCalculator> {
       for (final doc in querySnapshot.docs) {
         final data = doc.data();
         final name = data['name'] as String?;
-        // ИСПРАВЛЕНО: Используем weightedAveragePrice
         final price = (data['weightedAveragePrice'] as num?)?.toDouble();
         if (name != null && price != null) {
           prices[name] = price;
@@ -681,86 +703,195 @@ class _FarmProfitCalculatorState extends State<FarmProfitCalculator> {
     return prices;
   }
 
-  Future<double> _calculateProfit() async {
-    if (widget.formula.isEmpty) {
-      return 0.0;
-    }
-
-    final itemNamesInFormula = _extractItemNames(widget.formula);
-
-    if (itemNamesInFormula.isEmpty) {
-      try {
-        final result = widget.formula.interpret();
-        return (result).toDouble();
-      } catch (e) {
-        throw Exception(
-          'Формула не содержит предметов и не является валидным математическим выражением.',
-        );
-      }
-    }
-
-    final Map<String, double> itemPrices = await _getItemPricesFromFirestore(
-      itemNamesInFormula,
-    );
-
-    String formulaWithPrices = widget.formula;
-    for (String name in itemNamesInFormula) {
-      final double price = itemPrices[name] ?? 0.0;
-      formulaWithPrices = formulaWithPrices.replaceAll(
-        '"$name"',
-        price.toString(),
-      );
-    }
-
-    try {
-      final result = formulaWithPrices.interpret();
-      return (result).toDouble();
-    } catch (e) {
-      throw Exception(
-        'Ошибка при вычислении формулы: $e. Обработанная формула: $formulaWithPrices',
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<double>(
       future: _profitFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Row(
-            children: [
-              Text('Прибыль: '),
-              SizedBox(width: 8),
-              SizedBox(
+          return const Row(children: [
+            Text('Прибыль за крафт: '),
+            SizedBox(width: 8),
+            SizedBox(
                 height: 16,
                 width: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ],
-          );
+                child: CircularProgressIndicator(strokeWidth: 2))
+          ]);
         }
         if (snapshot.hasError) {
           return Tooltip(
-            message: snapshot.error.toString(),
-            child: Text(
-              'Прибыль: Ошибка',
-              style: TextStyle(color: Colors.orange.shade800),
-            ),
-          );
+              message: snapshot.error.toString(),
+              child: Text('Прибыль за крафт: Ошибка',
+                  style: TextStyle(color: Colors.orange.shade800)));
         }
         if (!snapshot.hasData) {
-          return const Text('Прибыль: Не удалось рассчитать');
+          return const Text('Прибыль за крафт: Не удалось рассчитать');
         }
 
         final profit = snapshot.data!;
         return Text(
-          'Прибыль: ${profit.toStringAsFixed(2)} з',
+          'Прибыль за крафт: ${profit.toStringAsFixed(2)} з',
           style: TextStyle(
-            color: profit > 0 ? Colors.green.shade600 : Colors.red.shade600,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+              color: profit > 0 ? Colors.green.shade600 : Colors.red.shade600,
+              fontWeight: FontWeight.bold,
+              fontSize: 16),
+        );
+      },
+    );
+  }
+}
+
+// --- КОМПАКТНЫЙ ВИДЖЕТ ДЛЯ ОТОБРАЖЕНИЯ КОМПОНЕНТОВ ---
+class FarmComponentsList extends StatefulWidget {
+  final String formula;
+
+  const FarmComponentsList({super.key, required this.formula});
+
+  @override
+  State<FarmComponentsList> createState() => _FarmComponentsListState();
+}
+
+class _FarmComponentsListState extends State<FarmComponentsList> {
+  late Future<List<Map<String, dynamic>>> _componentsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _componentsFuture = _prepareComponentsData();
+  }
+
+  @override
+  void didUpdateWidget(covariant FarmComponentsList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.formula != widget.formula) {
+      setState(() {
+        _componentsFuture = _prepareComponentsData();
+      });
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _prepareComponentsData() async {
+    if (widget.formula.isEmpty) return [];
+
+    final nameRegex = RegExp(r'"([^"]+)"');
+    final allItemNames =
+        nameRegex.allMatches(widget.formula).map((m) => m.group(1)!).toSet();
+
+    if (allItemNames.isEmpty) return [];
+
+    final itemsData = await _getItemsDataFromFirestore(allItemNames);
+
+    final List<Map<String, dynamic>> components = [];
+    for (final name in allItemNames) {
+      final itemData = itemsData[name];
+      if (itemData != null) {
+        components.add({
+          'name': name,
+          'price': (itemData['price'] as num?)?.toDouble() ?? 0.0,
+          'iconUrl': itemData['iconUrl'] as String?,
+        });
+      }
+    }
+
+    components.sort((a, b) => a['name'].compareTo(b['name']));
+
+    return components;
+  }
+
+  Future<Map<String, dynamic>> _getItemsDataFromFirestore(
+      Set<String> itemNames) async {
+    if (itemNames.isEmpty) return {};
+    final Map<String, dynamic> items = {};
+    final namesList = itemNames.toList();
+
+    for (var i = 0; i < namesList.length; i += 30) {
+      final chunk = namesList.sublist(
+          i, i + 30 > namesList.length ? namesList.length : i + 30);
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('favorites')
+          .where('name', whereIn: chunk)
+          .get();
+      for (final doc in querySnapshot.docs) {
+        final data = doc.data();
+        final name = data['name'] as String?;
+        if (name != null) {
+          items[name] = {
+            'price': (data['weightedAveragePrice'] as num?)?.toDouble() ?? 0.0,
+            'iconUrl': data['iconUrl'] as String?,
+          };
+        }
+      }
+    }
+    return items;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _componentsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              child: Center(
+                  child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))));
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final components = snapshot.data!;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+              child: Text('Компоненты:',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontSize: 16)),
+            ),
+            Wrap(
+              spacing: 12.0,
+              runSpacing: 6.0,
+              children: components.map((component) {
+                final pricePerPiece = component['price'];
+                return Chip(
+                  avatar: CircleAvatar(
+                    radius: 11,
+                    backgroundColor: Colors.transparent,
+                    child: component['iconUrl'] != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(3.0),
+                            child: Image.network(
+                              component['iconUrl']!,
+                              width: 22,
+                              height: 22,
+                              fit: BoxFit.cover,
+                              errorBuilder: (c, o, s) =>
+                                  const Icon(Icons.inventory_2, size: 12),
+                            ),
+                          )
+                        : const Icon(Icons.inventory_2, size: 12),
+                  ),
+                  label: Text(
+                    '${component['name']}: ${pricePerPiece.toStringAsFixed(2)} з',
+                  ),
+                  labelStyle: const TextStyle(fontSize: 12),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity:
+                      const VisualDensity(horizontal: 0.0, vertical: -2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                );
+              }).toList(),
+            ),
+          ],
         );
       },
     );

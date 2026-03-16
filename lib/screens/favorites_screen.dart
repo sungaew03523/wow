@@ -17,6 +17,7 @@ class FavoritesScreen extends StatefulWidget {
 class _FavoritesScreenState extends State<FavoritesScreen> {
   bool _isPriceUpdating = false;
   bool _isRenaming = false;
+  bool _isClearingHistory = false; // State for the new button
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   Timer? _timer;
 
@@ -26,11 +27,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   void initState() {
     super.initState();
-    // Start the timer to update prices every hour
     _timer = Timer.periodic(const Duration(hours: 1), (timer) {
       _updateFavoritePrices();
     });
-    // Also update prices once immediately when the screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateFavoritePrices();
     });
@@ -38,7 +37,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   void dispose() {
-    // Cancel the timer when the screen is disposed
     _timer?.cancel();
     super.dispose();
   }
@@ -46,48 +44,48 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Future<void> _updateFavoritePrices() async {
     if (_isPriceUpdating) return;
     setState(() => _isPriceUpdating = true);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Обновление цен началось...')),
-      );
-    }
+    
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    scaffoldMessenger.showSnackBar(
+      const SnackBar(content: Text('Обновление цен началось...')),
+    );
 
     try {
       final favoritesSnapshot = await _firestore.collection('favorites').get();
       final Map<String, int> itemsToUpdate = {
         for (var doc in favoritesSnapshot.docs)
-          doc.id: ((doc.data() as Map<String, dynamic>)['analysisVolume'] ?? 1000) as int
+          doc.id:
+              (doc.data()['analysisVolume'] ?? 1000)
       };
 
       if (itemsToUpdate.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Нет избранных предметов для обновления.'),
-                backgroundColor: Colors.orange),
-          );
-        }
+        if (!mounted) return;
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+              content: Text('Нет избранных предметов для обновления.'),
+              backgroundColor: Colors.orange),
+        );
         setState(() => _isPriceUpdating = false);
         return;
       }
 
       await BlizzardApiService().fetchReagentPrices(itemsToUpdate);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Цены успешно обновлены!'),
-              backgroundColor: Colors.green),
-        );
-      }
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+            content: Text('Цены успешно обновлены!'),
+            backgroundColor: Colors.green),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Ошибка при обновлении цен: $e'),
-              backgroundColor: Colors.red),
-        );
-      }
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+            content: Text('Ошибка при обновлении цен: $e'),
+            backgroundColor: Colors.red),
+      );
     } finally {
       if (mounted) {
         setState(() => _isPriceUpdating = false);
@@ -98,11 +96,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Future<void> _renameDuplicateFavorites() async {
     if (_isRenaming) return;
     setState(() => _isRenaming = true);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Проверка и переименование дубликатов...')),
-      );
-    }
+    
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    scaffoldMessenger.showSnackBar(
+      const SnackBar(
+          content: Text('Проверка и переименование дубликатов...')),
+    );
 
     try {
       final favoritesSnapshot = await _firestore.collection('favorites').get();
@@ -112,8 +113,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       final Map<String, List<AuctionItem>> itemsByName = {};
       for (var item in favorites) {
         final baseName = item.name.split(' ').take(item.name.split(' ').length - 1).join(' ');
-        final nameToGroup = item.name.contains(RegExp(r' \d+$')) ? baseName : item.name;
-        
+        final nameToGroup =
+            item.name.contains(RegExp(r' \d+$')) ? baseName : item.name;
+
         itemsByName.putIfAbsent(nameToGroup, () => []).add(item);
       }
 
@@ -129,7 +131,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             final item = items[i];
             final newName = '${entry.key} ${i + 1}';
             if (item.name != newName) {
-              final docRef = _firestore.collection('favorites').doc(item.id.toString());
+              final docRef =
+                  _firestore.collection('favorites').doc(item.id.toString());
               batch.update(docRef, {'name': newName});
               renameCount++;
             }
@@ -139,34 +142,161 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
       if (renameCount > 0) {
         await batch.commit();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('Переименовано $renameCount дубликатов.'),
-                backgroundColor: Colors.green),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Дубликаты не найдены.'),
-                backgroundColor: Colors.orange),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        if (!mounted) return;
+        scaffoldMessenger.showSnackBar(
           SnackBar(
-              content: Text('Ошибка при переименовании: $e'),
-              backgroundColor: Colors.red),
+              content: Text('Переименовано $renameCount дубликатов.'),
+              backgroundColor: Colors.green),
+        );
+      } else {
+        if (!mounted) return;
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+              content: Text('Дубликаты не найдены.'),
+              backgroundColor: Colors.orange),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+            content: Text('Ошибка при переименовании: $e'),
+            backgroundColor: Colors.red),
+      );
     } finally {
       if (mounted) {
         setState(() => _isRenaming = false);
       }
+    }
+  }
+
+  Future<void> _clearPriceHistory() async {
+    if (_isClearingHistory) return;
+
+    if (!mounted) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Подтверждение'),
+          content: const Text(
+              'Вы уверены, что хотите удалить историю цен для ВСЕХ избранных предметов? Это действие необратимо.'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Отмена'),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Удалить'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() => _isClearingHistory = true);
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    scaffoldMessenger.showSnackBar(
+      const SnackBar(content: Text('Очистка истории цен...')),
+    );
+
+    try {
+      final favoritesSnapshot = await _firestore.collection('favorites').get();
+      if (favoritesSnapshot.docs.isEmpty) {
+        if (!mounted) return;
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+              content: Text('Нет предметов для очистки.'),
+              backgroundColor: Colors.orange),
+        );
+        return;
+      }
+
+      final WriteBatch batch = _firestore.batch();
+
+      for (var doc in favoritesSnapshot.docs) {
+        batch.update(doc.reference, {'averagePriceHistory': {}});
+      }
+
+      await batch.commit();
+
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+            content: Text('История цен успешно очищена!'),
+            backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+            content: Text('Ошибка при очистке истории: $e'),
+            backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isClearingHistory = false);
+      }
+    }
+  }
+
+  Future<void> _clearSingleItemHistory(BuildContext context, AuctionItem item) async {
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Подтверждение'),
+          content: Text('Вы уверены, что хотите удалить историю цен для "${item.name}"?'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Отмена'),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Удалить'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await _firestore
+          .collection('favorites')
+          .doc(item.id.toString())
+          .update({'averagePriceHistory': {}});
+
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+            content: Text('История цен для "${item.name}" очищена.'),
+            backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+            content: Text('Ошибка при очистке истории для "${item.name}": $e'),
+            backgroundColor: Colors.red),
+      );
     }
   }
 
@@ -202,12 +332,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   }
                   final favoriteDocs = snapshot.data?.docs ?? [];
                   if (favoriteDocs.isEmpty) {
-                    return const Center(child: Text('Нет избранных предметов.'));
+                    return const Center(
+                        child: Text('Нет избранных предметов.'));
                   }
                   return ListView.builder(
                     itemCount: favoriteDocs.length,
                     itemBuilder: (context, index) {
-                      final item = AuctionItem.fromFirestore(favoriteDocs[index]);
+                      final item =
+                          AuctionItem.fromFirestore(favoriteDocs[index]);
                       return _buildItemRow(context, item, true, index);
                     },
                   );
@@ -238,16 +370,30 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           style: buttonStyle,
           onPressed: _isPriceUpdating ? null : _updateFavoritePrices,
           icon: _isPriceUpdating
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 3))
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 3))
               : const Icon(Icons.refresh, size: 20),
           label: const Text('Обновить все цены'),
+        ),
+        ElevatedButton.icon(
+          style: buttonStyle,
+          onPressed: _isClearingHistory ? null : _clearPriceHistory,
+          icon: _isClearingHistory
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 3))
+              : const Icon(Icons.delete_sweep, size: 20),
+          label: const Text('Очистить историю'),
         ),
         const SizedBox(width: 12),
         ElevatedButton(
           style: buttonStyle,
           onPressed: _isRenaming ? null : _renameDuplicateFavorites,
           child: _isRenaming
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 3))
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 3))
               : const Text('Переименовать дубликаты'),
         ),
       ],
@@ -260,17 +406,31 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       child: Row(
         children: [
           const SizedBox(width: 52), // Icon + padding
-          Expanded(flex: 2, child: Text('Название', style: theme.textTheme.titleMedium)),
-          SizedBox(width: 100, child: Text('Объем', style: theme.textTheme.titleMedium, textAlign: TextAlign.center)),
-          Expanded(flex: 3, child: Center(child: Text('График цен', style: theme.textTheme.titleMedium))),
-          SizedBox(width: 120, child: Text('Средняя цена', style: theme.textTheme.titleMedium, textAlign: TextAlign.right)),
-          const SizedBox(width: 40), // Star icon
+          Expanded(
+              flex: 2, child: Text('Название', style: theme.textTheme.titleMedium)),
+          SizedBox(
+              width: 100,
+              child: Text('Объем',
+                  style: theme.textTheme.titleMedium, textAlign: TextAlign.center)),
+          Expanded(
+              flex: 3,
+              child: Center(
+                  child: Text('График цен', style: theme.textTheme.titleMedium))),
+          SizedBox(
+              width: 120,
+              child: Text('Средняя цена',
+                  style: theme.textTheme.titleMedium, textAlign: TextAlign.right)),
+          SizedBox(
+              width: 90,
+              child: Text('Действия',
+                  style: theme.textTheme.titleMedium,
+                  textAlign: TextAlign.right)),
         ],
       ),
     );
   }
 
-   Widget _buildItemRow(
+  Widget _buildItemRow(
       BuildContext context, AuctionItem item, bool isFavorited, int index) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4.0),
@@ -298,7 +458,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   : const Icon(Icons.inventory_2, size: 20),
             ),
             const SizedBox(width: 16),
-            Expanded(flex: 2, child: Text(item.name, style: Theme.of(context).textTheme.bodyLarge)),
+            Expanded(
+                flex: 2,
+                child: Text(item.name, style: Theme.of(context).textTheme.bodyLarge)),
             SizedBox(
               width: 100,
               child: InkWell(
@@ -306,7 +468,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(item.analysisVolume.toString(), style: Theme.of(context).textTheme.bodyLarge),
+                    Text(item.analysisVolume.toString(),
+                        style: Theme.of(context).textTheme.bodyLarge),
                     const SizedBox(width: 8),
                     const Icon(Icons.edit, size: 16, color: Colors.grey),
                   ],
@@ -318,26 +481,41 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 width: 120,
                 child: Text(item.weightedAveragePrice?.toStringAsFixed(2) ?? '-',
                     textAlign: TextAlign.right)),
-
-            GestureDetector(
-              onTap: () => _toggleFavorite(context, item, isFavorited),
-              child: Container(
-                width: 40,
-                height: 40,
-                color: Colors.transparent,
-                alignment: Alignment.center,
-                child: Tooltip(
-                  message: isFavorited
-                      ? 'Удалить из избранного'
-                      : 'Добавить в избранное',
-                  child: Icon(
-                    isFavorited ? Icons.star : Icons.star_border,
-                    color: isFavorited
-                        ? const Color(0xFFFFC700)
-                        : const Color(0xFFD4BF7A),
-                    size: 24,
+            SizedBox(
+              width: 90,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Tooltip(
+                    message: 'Очистить историю цен',
+                    child: IconButton(
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(Icons.history_toggle_off_outlined),
+                      onPressed: () => _clearSingleItemHistory(context, item),
+                      color: Colors.grey[400],
+                      iconSize: 20,
+                      splashRadius: 18,
+                    ),
                   ),
-                ),
+                  Tooltip(
+                    message: isFavorited
+                        ? 'Удалить из избранного'
+                        : 'Добавить в избранное',
+                    child: IconButton(
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
+                      icon: Icon(isFavorited ? Icons.star : Icons.star_border),
+                      onPressed: () =>
+                          _toggleFavorite(context, item, isFavorited),
+                      color: isFavorited
+                          ? const Color(0xFFFFC700)
+                          : const Color(0xFFD4BF7A),
+                      iconSize: 22,
+                      splashRadius: 18,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -347,7 +525,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   void _showEditVolumeDialog(BuildContext context, AuctionItem item) {
-    final controller = TextEditingController(text: item.analysisVolume.toString());
+    final controller =
+        TextEditingController(text: item.analysisVolume.toString());
     showDialog(
       context: context,
       builder: (context) {
@@ -389,7 +568,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-
   Widget _buildPriceHistoryChart(AuctionItem item, int index) {
     final history = item.averagePriceHistory;
     if (history == null || history.isEmpty) {
@@ -397,7 +575,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     }
 
     if (history.isEmpty) {
-      return Center(child: Text('Нет данных', style: TextStyle(color: Colors.grey[600])));
+      return Center(
+          child: Text('Нет данных', style: TextStyle(color: Colors.grey[600])));
     }
 
     List<FlSpot> spots = [];
@@ -418,7 +597,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     }
 
     if (spots.length < 2) {
-       return Center(child: Text('Недостаточно данных', style: TextStyle(color: Colors.grey[600])));
+      return Center(
+          child: Text('Недостаточно данных',
+              style: TextStyle(color: Colors.grey[600])));
     }
 
     return SizedBox(
@@ -436,12 +617,18 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               getTooltipItems: (touchedBarSpots) {
                 return touchedBarSpots.map((barSpot) {
                   final spotIndex = barSpot.spotIndex;
-                  if (spotIndex < 0 || spotIndex >= sortedKeys.length) return null;
-                  final date = DateFormat('dd MMM').format(DateTime.parse(sortedKeys[spotIndex]));
+                  if (spotIndex < 0 || spotIndex >= sortedKeys.length) {
+                    return null;
+                  }
+                  final date = DateFormat('dd MMM')
+                      .format(DateTime.parse(sortedKeys[spotIndex]));
                   final price = barSpot.y.toStringAsFixed(2);
                   return LineTooltipItem(
                     '$date\n$price g',
-                    const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold),
                   );
                 }).whereType<LineTooltipItem>().toList();
               },
@@ -468,7 +655,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  void _toggleFavorite(BuildContext context, AuctionItem item, bool isFavorited) {
+  void _toggleFavorite(
+      BuildContext context, AuctionItem item, bool isFavorited) {
     final collection = FirebaseFirestore.instance.collection('favorites');
     final docId = item.id.toString();
 
@@ -478,9 +666,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         builder: (BuildContext dialogContext) {
           return AlertDialog(
             title: const Text('Подтверждение'),
-            content: Text('Вы уверены, что хотите удалить "${item.name}" из избранного?'),
+            content: Text(
+                'Вы уверены, что хотите удалить "${item.name}" из избранного?'),
             actions: <Widget>[
-              TextButton(child: const Text('Отмена'), onPressed: () => Navigator.of(dialogContext).pop()),
+              TextButton(
+                  child: const Text('Отмена'),
+                  onPressed: () => Navigator.of(dialogContext).pop()),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                 onPressed: () {

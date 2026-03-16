@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 import './wow_config.dart';
 import './models/auction_item.dart';
@@ -133,8 +134,8 @@ class BlizzardApiService {
             iconUrl: iconAsset?['value'] as String?,
           ));
         }
-      } catch (e) {
-        print('Исключение при обработке предмета $id: $e');
+      } catch (e, s) {
+        developer.log('Исключение при обработке предмета $id', error: e, stackTrace: s);
       }
     }
     return items;
@@ -169,30 +170,30 @@ class BlizzardApiService {
       nextUri = nextLink != null ? Uri.parse(nextLink) : null;
     }
 
-    print("--- Начинаем новый расчет цен ---");
+    developer.log("--- Начинаем новый расчет цен ---");
 
     for (var itemIdStr in favoriteIds) {
       final itemId = int.parse(itemIdStr);
       final analysisVolume = itemsToUpdate[itemIdStr] ?? 1000;
       final itemAuctions = auctionsByItem[itemId];
 
-      print("\n--- Обработка предмета ID: $itemId (Объем: $analysisVolume) ---");
+      developer.log("\n--- Обработка предмета ID: $itemId (Объем: $analysisVolume) ---");
 
       if (itemAuctions == null || itemAuctions.isEmpty) {
-        print('Нет аукционов для предмета $itemId, пропуск.');
+        developer.log('Нет аукционов для предмета $itemId, пропуск.');
         continue;
       }
       
       itemAuctions.sort((a, b) => (a['unit_price'] as int).compareTo(b['unit_price'] as int));
 
       double minimalCost = (itemAuctions.first['unit_price'] as int) / 10000.0;
-      print("Минимальная цена (самый дешевый лот): $minimalCost");
+      developer.log("Минимальная цена (самый дешевый лот): $minimalCost");
 
       int accumulatedQuantity = 0;
       double totalCostForWeightedAverage = 0;
       double marketPrice = minimalCost;
 
-      print("Начинаем итерацию по отсортированным лотам:");
+      developer.log("Начинаем итерацию по отсортированным лотам:");
       int lotCounter = 0;
       for (var auction in itemAuctions) {
         lotCounter++;
@@ -204,15 +205,15 @@ class BlizzardApiService {
               ? analysisVolume - accumulatedQuantity
               : quantity;
 
-          print("  Лот $lotCounter: Цена: $unitPrice, Кол-во: $quantity. Учитываем: $quantityToConsider");
+          developer.log("  Лот $lotCounter: Цена: $unitPrice, Кол-во: $quantity. Учитываем: $quantityToConsider");
           
           totalCostForWeightedAverage += quantityToConsider * unitPrice;
           accumulatedQuantity += quantityToConsider;
           marketPrice = unitPrice;
 
-          print("    -> Накоплено кол-во: $accumulatedQuantity, Общая стоимость для среднего: ${totalCostForWeightedAverage.toStringAsFixed(2)}, Цена стены: $marketPrice");
+          developer.log("    -> Накоплено кол-во: $accumulatedQuantity, Общая стоимость для среднего: ${totalCostForWeightedAverage.toStringAsFixed(2)}, Цена стены: $marketPrice");
         } else {
-           print("  Лот $lotCounter: Цена: $unitPrice, Кол-во: $quantity. Пропускаем (объем $analysisVolume достигнут).");
+           developer.log("  Лот $lotCounter: Цена: $unitPrice, Кол-во: $quantity. Пропускаем (объем $analysisVolume достигнут).");
            break;
         }
       }
@@ -221,9 +222,9 @@ class BlizzardApiService {
           ? totalCostForWeightedAverage / accumulatedQuantity
           : minimalCost;
 
-      print("--- ИТОГ для ID: $itemId ---");
-      print("  Цена стены (Market Price): ${marketPrice.toStringAsFixed(2)}");
-      print("  Средневзвешенная цена (Weighted Avg): ${weightedAveragePrice.toStringAsFixed(2)}");
+      developer.log("--- ИТОГ для ID: $itemId ---");
+      developer.log("  Цена стены (Market Price): ${marketPrice.toStringAsFixed(2)}");
+      developer.log("  Средневзвешенная цена (Weighted Avg): ${weightedAveragePrice.toStringAsFixed(2)}");
 
       final docRef = _firestore.collection('favorites').doc(itemIdStr);
       await _firestore.runTransaction((transaction) async {
@@ -246,6 +247,6 @@ class BlizzardApiService {
         });
       });
     }
-    print("Цены для ${favoriteIds.length} избранных предметов обновлены.");
+    developer.log("Цены для ${favoriteIds.length} избранных предметов обновлены.");
   }
 }
