@@ -215,6 +215,12 @@ class BlizzardApiService {
         developer.log('Нет аукционов для предмета $itemId, пропуск.');
         continue;
       }
+
+      int totalItemQuantity = 0;
+      for (var auction in itemAuctions) {
+          totalItemQuantity += (auction['quantity'] as int?) ?? 0;
+      }
+      developer.log("Общее количество на аукционе: $totalItemQuantity");
       
       itemAuctions.sort((a, b) => (a['unit_price'] as int).compareTo(b['unit_price'] as int));
 
@@ -257,6 +263,7 @@ class BlizzardApiService {
       developer.log("--- ИТОГ для ID: $itemId ---");
       developer.log("  Цена стены (Market Price): ${marketPrice.toStringAsFixed(2)}");
       developer.log("  Средневзвешенная цена (Weighted Avg): ${weightedAveragePrice.toStringAsFixed(2)}");
+      developer.log("  Общее количество: $totalItemQuantity");
 
       final docRef = _firestore.collection('favorites').doc(itemIdStr);
       await _firestore.runTransaction((transaction) async {
@@ -264,21 +271,24 @@ class BlizzardApiService {
         if (!docSnapshot.exists) return;
 
         final data = docSnapshot.data() as Map<String, dynamic>;
-        final history = (data['averagePriceHistory'] as Map<String, dynamic>?) ?? {};
+        final priceHistory = (data['averagePriceHistory'] as Map<String, dynamic>?) ?? {};
+        final quantityHistory = (data['totalQuantityHistory'] as Map<String, dynamic>?) ?? {};
 
         final now = DateTime.now();
-        final formatter = DateFormat('yyyy-MM-dd HH');
-        final timestampKey = formatter.format(now);
-        history[timestampKey] = weightedAveragePrice;
+        final timestampKey = DateFormat('yyyy-MM-dd HH').format(now);
+        
+        priceHistory[timestampKey] = weightedAveragePrice;
+        quantityHistory[timestampKey] = totalItemQuantity;
 
         transaction.update(docRef, {
           'minimalCost': minimalCost,
           'marketPrice': marketPrice,
           'weightedAveragePrice': weightedAveragePrice,
-          'averagePriceHistory': history,
+          'averagePriceHistory': priceHistory,
+          'totalQuantityHistory': quantityHistory,
         });
       });
     }
-    developer.log("Цены для ${favoriteIds.length} избранных предметов обновлены.");
+    developer.log("Цены и количество для ${favoriteIds.length} избранных предметов обновлены.");
   }
 }

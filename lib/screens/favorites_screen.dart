@@ -236,7 +236,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     }
   }
 
-  Future<void> _clearPriceHistory() async {
+  Future<void> _clearAllHistory() async {
     if (_isClearingHistory) return;
 
     if (!mounted) return;
@@ -246,7 +246,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         return AlertDialog(
           title: const Text('Подтверждение'),
           content: const Text(
-              'Вы уверены, что хотите удалить историю цен для ВСЕХ избранных предметов? Это действие необратимо.'),
+              'Вы уверены, что хотите удалить ВСЮ историю цен и количества для ВСЕХ избранных предметов? Это действие необратимо.'),
           actions: <Widget>[
             TextButton(
               child: const Text('Отмена'),
@@ -255,7 +255,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Удалить'),
+              child: const Text('Удалить всю историю'),
             ),
           ],
         );
@@ -271,7 +271,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     scaffoldMessenger.showSnackBar(
-      const SnackBar(content: Text('Очистка истории цен...')),
+      const SnackBar(content: Text('Очистка всей истории...')),
     );
 
     try {
@@ -289,7 +289,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       final WriteBatch batch = _firestore.batch();
 
       for (var doc in favoritesSnapshot.docs) {
-        batch.update(doc.reference, {'averagePriceHistory': {}});
+        batch.update(doc.reference, {
+          'averagePriceHistory': {},
+          'totalQuantityHistory': {},
+        });
       }
 
       await batch.commit();
@@ -297,7 +300,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       if (!mounted) return;
       scaffoldMessenger.showSnackBar(
         const SnackBar(
-            content: Text('История цен успешно очищена!'),
+            content: Text('Вся история успешно очищена!'),
             backgroundColor: Colors.green),
       );
     } catch (e) {
@@ -404,7 +407,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         ),
         ElevatedButton.icon(
           style: buttonStyle,
-          onPressed: _isClearingHistory ? null : _clearPriceHistory,
+          onPressed: _isClearingHistory ? null : _clearAllHistory,
           icon: _isClearingHistory
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 3))
               : const Icon(Icons.delete_sweep, size: 20),
@@ -534,17 +537,14 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                 ],
               ),
             ),
-            SizedBox(
-                width: 90,
-                child: Text(widget.item.weightedAveragePrice?.toStringAsFixed(2) ?? '-',
-                    textAlign: TextAlign.right)),
+             _buildPriceAndQuantityDisplay(widget.item),
             SizedBox(
               width: 90,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Tooltip(
-                    message: 'Очистить историю цен',
+                    message: 'Очистить историю предмета',
                     child: IconButton(
                       padding: const EdgeInsets.all(8),
                       constraints: const BoxConstraints(),
@@ -573,6 +573,33 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPriceAndQuantityDisplay(AuctionItem item) {
+    final priceStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold);
+    final quantityStyle = Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.cyan[200]);
+
+    final lastQuantity = item.totalQuantityHistory?.values.last ?? 0;
+
+    return SizedBox(
+      width: 90,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (lastQuantity > 0)
+            Text(
+              NumberFormat.compact().format(lastQuantity),
+              style: quantityStyle,
+              overflow: TextOverflow.ellipsis,
+            ),
+          Text(
+            item.weightedAveragePrice?.toStringAsFixed(2) ?? '-',
+            style: priceStyle,
+            textAlign: TextAlign.right,
+          ),
+        ],
       ),
     );
   }
@@ -796,91 +823,101 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
   }
 
   Widget _buildPriceHistoryChart(AuctionItem item) {
-    final history = item.averagePriceHistory;
-    if (history == null || history.isEmpty) {
-      return Center(child: Text('-', style: TextStyle(color: Colors.grey[600])));
+    final priceHistory = item.averagePriceHistory;
+
+    if (priceHistory == null || priceHistory.isEmpty) {
+        return Center(child: Text('-', style: TextStyle(color: Colors.grey[600])));
     }
 
-    if (history.isEmpty) {
-      return Center(
-          child: Text('Нет данных', style: TextStyle(color: Colors.grey[600])));
-    }
+    final sortedKeys = priceHistory.keys.toList()..sort();
 
-    List<FlSpot> spots = [];
-    final sortedKeys = history.keys.toList()..sort();
-
-    double minY = double.maxFinite;
-    double maxY = double.minPositive;
+    List<FlSpot> priceSpots = [];
+    double minPrice = double.maxFinite;
+    double maxPrice = double.minPositive;
 
     for (var i = 0; i < sortedKeys.length; i++) {
-      final key = sortedKeys[i];
-      final value = history[key];
-      if (value != null) {
-        final doubleValue = value.toDouble();
-        spots.add(FlSpot(i.toDouble(), doubleValue));
-        if (doubleValue < minY) minY = doubleValue;
-        if (doubleValue > maxY) maxY = doubleValue;
-      }
+        final key = sortedKeys[i];
+        final priceValue = priceHistory[key];
+
+        if (priceValue != null) {
+            final doublePrice = priceValue.toDouble();
+            priceSpots.add(FlSpot(i.toDouble(), doublePrice));
+            if (doublePrice < minPrice) minPrice = doublePrice;
+            if (doublePrice > maxPrice) maxPrice = doublePrice;
+        }
     }
 
-    if (spots.length < 2) {
-      return Center(
-          child: Text('Недостаточно данных',
-              style: TextStyle(color: Colors.grey[600])));
+    if (priceSpots.length < 2) {
+        return Center(child: Text('Недостаточно данных', style: TextStyle(color: Colors.grey[600])));
     }
+
+    final priceAxisInterval = (maxPrice - minPrice) / 4;
 
     return SizedBox(
-      height: 40,
-      child: LineChart(
-        LineChartData(
-          gridData: const FlGridData(show: false),
-          titlesData: const FlTitlesData(show: false),
-          borderData: FlBorderData(show: false),
-          lineTouchData: LineTouchData(
-            touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (touchedSpot) => const Color(0xFF343a40),
-              fitInsideHorizontally: true,
-              fitInsideVertically: true,
-              getTooltipItems: (touchedBarSpots) {
-                return touchedBarSpots.map((barSpot) {
-                  final spotIndex = barSpot.spotIndex;
-                  if (spotIndex < 0 || spotIndex >= sortedKeys.length) {
-                    return null;
-                  }
-                  final date = DateFormat('dd MMM')
-                      .format(DateTime.parse(sortedKeys[spotIndex]));
-                  final price = barSpot.y.toStringAsFixed(2);
-                  return LineTooltipItem(
-                    '$date\n$price g',
-                    const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold),
-                  );
-                }).whereType<LineTooltipItem>().toList();
-              },
+        height: 60,
+        child: LineChart(
+            LineChartData(
+                gridData: const FlGridData(show: false),
+                titlesData: const FlTitlesData(show: false), 
+                borderData: FlBorderData(show: false),
+
+                lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                        getTooltipColor: (touchedSpot) => const Color(0xFF343a40),
+                        fitInsideHorizontally: true,
+                        fitInsideVertically: true,
+                        getTooltipItems: (touchedSpots) {
+                            return touchedSpots.map((spot) {
+                                final date = DateFormat('dd MMM').format(DateTime.parse(sortedKeys[spot.spotIndex]));
+                                final text = '${spot.y.toStringAsFixed(2)} g';
+                                final color = Colors.greenAccent;
+                                
+                                return LineTooltipItem(
+                                    '$date\n$text',
+                                    TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
+                                );
+                            }).toList();
+                        },
+                    ),
+                ),
+
+                minY: minPrice - priceAxisInterval * 0.5,
+                maxY: maxPrice + priceAxisInterval * 0.5,
+                
+                extraLinesData: ExtraLinesData(
+                  horizontalLines: [
+                    HorizontalLine(
+                      y: minPrice, 
+                      color: Colors.greenAccent.withOpacity(0.3), 
+                      strokeWidth: 1,
+                      dashArray: [5, 5],
+                    ),
+                    HorizontalLine(
+                      y: maxPrice,
+                      color: Colors.greenAccent.withOpacity(0.3),
+                      strokeWidth: 1,
+                      dashArray: [5, 5],
+                    ),
+                  ]
+                ),
+
+                lineBarsData: [
+                    LineChartBarData(
+                        spots: priceSpots,
+                        isCurved: true,
+                        color: Colors.greenAccent,
+                        barWidth: 2.5,
+                        isStrokeCapRound: true,
+                        dotData: const FlDotData(show: false),
+                        belowBarData: BarAreaData(show: true, color: Colors.greenAccent.withAlpha(50)),
+                    ),
+                ],
             ),
-          ),
-          minY: minY - (maxY - minY) * 0.1,
-          maxY: maxY + (maxY - minY) * 0.1,
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              color: Colors.greenAccent,
-              barWidth: 2.5,
-              isStrokeCapRound: true,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                color: Colors.greenAccent.withAlpha(50),
-              ),
-            ),
-          ],
         ),
-      ),
     );
-  }
+}
+
+
 
   Future<void> _clearSingleItemHistory(BuildContext context, AuctionItem item) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
@@ -890,7 +927,7 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Подтверждение'),
-          content: Text('Вы уверены, что хотите удалить историю цен для "${item.name}"?'),
+          content: Text('Вы уверены, что хотите удалить историю цен и количества для "${item.name}"?'),
           actions: <Widget>[
             TextButton(
               child: const Text('Отмена'),
@@ -914,12 +951,15 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
       await _firestore
           .collection('favorites')
           .doc(item.id.toString())
-          .update({'averagePriceHistory': {}});
+          .update({
+            'averagePriceHistory': {},
+            'totalQuantityHistory': {},
+          });
 
       if (!mounted) return;
       scaffoldMessenger.showSnackBar(
         SnackBar(
-            content: Text('История цен для "${item.name}" очищена.'),
+            content: Text('История для "${item.name}" очищена.'),
             backgroundColor: Colors.green),
       );
     } catch (e) {

@@ -9,6 +9,7 @@ class AuctionItem {
   final double? marketPrice; // Цена стены
   final double? weightedAveragePrice; // Средневзвешенная цена
   final Map<String, dynamic>? averagePriceHistory;
+  final Map<String, dynamic>? totalQuantityHistory;
   final int analysisVolume;
 
   AuctionItem({
@@ -19,6 +20,7 @@ class AuctionItem {
     this.marketPrice,
     this.weightedAveragePrice,
     this.averagePriceHistory,
+    this.totalQuantityHistory,
     this.analysisVolume = 1000,
   });
 
@@ -33,6 +35,9 @@ class AuctionItem {
       weightedAveragePrice: (data['weightedAveragePrice'] as num?)?.toDouble(),
       averagePriceHistory: data['averagePriceHistory'] != null
           ? Map<String, dynamic>.from(data['averagePriceHistory'])
+          : null,
+      totalQuantityHistory: data['totalQuantityHistory'] != null
+          ? Map<String, dynamic>.from(data['totalQuantityHistory'])
           : null,
       analysisVolume: data['analysisVolume'] ?? 1000,
     );
@@ -49,6 +54,8 @@ class AuctionItem {
       if (weightedAveragePrice != null) 'weightedAveragePrice': weightedAveragePrice,
       if (averagePriceHistory != null)
         'averagePriceHistory': averagePriceHistory,
+      if (totalQuantityHistory != null)
+        'totalQuantityHistory': totalQuantityHistory,
     };
   }
 
