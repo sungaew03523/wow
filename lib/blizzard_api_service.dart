@@ -206,10 +206,9 @@ class BlizzardApiService {
 
     for (var itemIdStr in favoriteIds) {
       final itemId = int.parse(itemIdStr);
-      final analysisVolume = itemsToUpdate[itemIdStr] ?? 1000;
       final itemAuctions = auctionsByItem[itemId];
 
-      developer.log("\n--- Обработка предмета ID: $itemId (Объем: $analysisVolume) ---");
+      developer.log("\n--- Обработка предмета ID: $itemId ---");
 
       if (itemAuctions == null || itemAuctions.isEmpty) {
         developer.log('Нет аукционов для предмета $itemId, пропуск.');
@@ -220,7 +219,12 @@ class BlizzardApiService {
       for (var auction in itemAuctions) {
           totalItemQuantity += (auction['quantity'] as int?) ?? 0;
       }
-      developer.log("Общее количество на аукционе: $totalItemQuantity");
+      
+      int targetVolume = (totalItemQuantity * 0.10).ceil();
+      if (targetVolume < 1) targetVolume = 1;
+      if (targetVolume > 3000) targetVolume = 3000;
+
+      developer.log("Общее количество на аукционе: $totalItemQuantity, Целевой объем: $targetVolume");
       
       itemAuctions.sort((a, b) => (a['unit_price'] as int).compareTo(b['unit_price'] as int));
 
@@ -238,9 +242,9 @@ class BlizzardApiService {
         final quantity = auction['quantity'] as int;
         final unitPrice = (auction['unit_price'] as int) / 10000.0;
 
-        if (accumulatedQuantity < analysisVolume) {
-          final quantityToConsider = (accumulatedQuantity + quantity) > analysisVolume
-              ? analysisVolume - accumulatedQuantity
+        if (accumulatedQuantity < targetVolume) {
+          final quantityToConsider = (accumulatedQuantity + quantity) > targetVolume
+              ? targetVolume - accumulatedQuantity
               : quantity;
 
           developer.log("  Лот $lotCounter: Цена: $unitPrice, Кол-во: $quantity. Учитываем: $quantityToConsider");
@@ -251,7 +255,7 @@ class BlizzardApiService {
 
           developer.log("    -> Накоплено кол-во: $accumulatedQuantity, Общая стоимость для среднего: ${totalCostForWeightedAverage.toStringAsFixed(2)}, Цена стены: $marketPrice");
         } else {
-           developer.log("  Лот $lotCounter: Цена: $unitPrice, Кол-во: $quantity. Пропускаем (объем $analysisVolume достигнут).");
+           developer.log("  Лот $lotCounter: Цена: $unitPrice, Кол-во: $quantity. Пропускаем (объем $targetVolume достигнут).");
            break;
         }
       }

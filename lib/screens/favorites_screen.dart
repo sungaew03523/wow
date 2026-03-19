@@ -17,7 +17,6 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
   bool _isPriceUpdating = false;
-  bool _isCalculatingVolumes = false;
   bool _isRenaming = false;
   bool _isClearingHistory = false;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -30,11 +29,26 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(hours: 1), (timer) {
-      _updateFavoritePrices();
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateFavoritePrices();
+    _scheduleNextUpdate();
+  }
+
+  void _scheduleNextUpdate() {
+    if (!mounted) return;
+    
+    final now = DateTime.now();
+    var nextUpdate = DateTime(now.year, now.month, now.day, now.hour, 30);
+    
+    if (now.isAfter(nextUpdate) || now.isAtSameMomentAs(nextUpdate)) {
+      nextUpdate = nextUpdate.add(const Duration(hours: 1));
+    }
+    
+    final waitDuration = nextUpdate.difference(now);
+    
+    _timer = Timer(waitDuration, () {
+      if (mounted) {
+        _updateFavoritePrices();
+        _scheduleNextUpdate();
+      }
     });
   }
 
@@ -43,70 +57,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     _timer?.cancel();
     super.dispose();
   }
-
-  Future<void> _calculateAndSetVolumes() async {
-    if (_isCalculatingVolumes) return;
-    setState(() => _isCalculatingVolumes = true);
-
-    if (!mounted) return;
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    scaffoldMessenger.showSnackBar(
-      const SnackBar(content: Text('Начинаем расчет объемов...')),
-    );
-
-    try {
-      final favoritesSnapshot = await _firestore.collection('favorites').get();
-      if (favoritesSnapshot.docs.isEmpty) {
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(content: Text('Нет избранных предметов для расчета.'), backgroundColor: Colors.orange),
-        );
-        setState(() => _isCalculatingVolumes = false);
-        return;
-      }
-
-      final itemIds = favoritesSnapshot.docs.map((doc) => doc.id).toList();
-      final itemQuantities = await _apiService.getAuctionQuantities(itemIds);
-
-      final WriteBatch batch = _firestore.batch();
-
-      for (var doc in favoritesSnapshot.docs) {
-        final totalQuantity = itemQuantities[doc.id] ?? 0;
-        int newVolume;
-
-        if (totalQuantity > 10000) {
-          newVolume = 1000;
-        } else if (totalQuantity > 5000) {
-          newVolume = 500;
-        } else if (totalQuantity > 1000) {
-          newVolume = 100;
-        } else if (totalQuantity > 500) {
-          newVolume = 50;
-        } else if (totalQuantity > 100) {
-          newVolume = 10;
-        } else {
-          newVolume = 5;
-        }
-
-        batch.update(doc.reference, {'analysisVolume': newVolume});
-      }
-
-      await batch.commit();
-
-       scaffoldMessenger.showSnackBar(
-        const SnackBar(content: Text('Объемы успешно рассчитаны и обновлены!'), backgroundColor: Colors.green),
-      );
-
-    } catch (e) {
-      scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text('Ошибка при расчете объемов: $e'), backgroundColor: Colors.red),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isCalculatingVolumes = false);
-      }
-    }
-  }
-
 
   Future<void> _updateFavoritePrices() async {
     if (_isPriceUpdating) return;
@@ -397,17 +347,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         ),
         ElevatedButton.icon(
           style: buttonStyle,
-          onPressed: _isCalculatingVolumes ? null : _calculateAndSetVolumes,
-          icon: _isCalculatingVolumes
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 3))
-              : const Icon(Icons.calculate_outlined, size: 20),
-          label: const Text('Рассчитать объемы'),
-        ),
-        ElevatedButton.icon(
-          style: buttonStyle,
           onPressed: _isClearingHistory ? null : _clearAllHistory,
           icon: _isClearingHistory
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 3))
@@ -450,10 +389,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             child: Text('Инвестиции', 
                 style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
           ),
-          SizedBox(
-              width: 90,
-              child: Text('Цена',
-                  style: theme.textTheme.titleMedium, textAlign: TextAlign.right)),
           SizedBox(
               width: 90,
               child: Text('Действия',
@@ -513,17 +448,22 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                 child: Text(widget.item.name, style: Theme.of(context).textTheme.bodyLarge)),
             SizedBox(
               width: 100,
-              child: InkWell(
-                onTap: () => _showEditVolumeDialog(context, widget.item),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(widget.item.analysisVolume.toString(),
-                        style: Theme.of(context).textTheme.bodyLarge),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.edit, size: 16, color: Colors.grey),
-                  ],
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    (() {
+                      final history = widget.item.totalQuantityHistory;
+                      final totalQty = (history != null && history.isNotEmpty) ? history.values.last : 0;
+                      if (totalQty == 0) return '-';
+                      int vol = (totalQty * 0.10).ceil();
+                      if (vol < 1) vol = 1;
+                      if (vol > 3000) vol = 3000;
+                      return vol.toString();
+                    })(),
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ],
               ),
             ),
             Expanded(flex: 3, child: _buildPriceHistoryChart(context, widget.item)),
@@ -541,7 +481,6 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                 ],
               ),
             ),
-             _buildPriceAndQuantityDisplay(widget.item),
             SizedBox(
               width: 90,
               child: Row(
@@ -577,33 +516,6 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildPriceAndQuantityDisplay(AuctionItem item) {
-    final priceStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold);
-    final quantityStyle = Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.cyan[200]);
-
-    final lastQuantity = item.totalQuantityHistory?.values.last ?? 0;
-
-    return SizedBox(
-      width: 90,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (lastQuantity > 0)
-            Text(
-              NumberFormat.compact().format(lastQuantity),
-              style: quantityStyle,
-              overflow: TextOverflow.ellipsis,
-            ),
-          Text(
-            item.weightedAveragePrice?.toStringAsFixed(2) ?? '-',
-            style: priceStyle,
-            textAlign: TextAlign.right,
-          ),
-        ],
       ),
     );
   }
@@ -780,52 +692,6 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
     );
   }
 
-  void _showEditVolumeDialog(BuildContext context, AuctionItem item) {
-    final controller =
-        TextEditingController(text: item.analysisVolume.toString());
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Изменить объем для "${item.name}"'),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'Объем для анализа'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Отмена'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final newVolume = int.tryParse(controller.text);
-                if (newVolume != null && newVolume > 0) {
-                  _firestore
-                      .collection('favorites')
-                      .doc(item.id.toString())
-                      .update({'analysisVolume': newVolume});
-                  Navigator.of(context).pop();
-                } else {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Введите корректное число.'),
-                          backgroundColor: Colors.red),
-                    );
-                  } 
-                }
-              },
-              child: const Text('Сохранить'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
 Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
     final priceHistory = item.averagePriceHistory;
     final quantityHistory = item.totalQuantityHistory;
@@ -866,7 +732,8 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
     final bool isQuantityFlat = (maxQuantity - minQuantity).abs() < 0.01;
 
     final priceRange = !isPriceFlat ? (maxPrice - minPrice) : 1.0;
-    final paddedMinPrice = isPriceFlat ? minPrice - priceRange * 0.5 : minPrice - priceRange * 0.2;
+    double paddedMinPrice = isPriceFlat ? minPrice - priceRange * 0.5 : minPrice - priceRange * 0.2;
+    if (paddedMinPrice < 0) paddedMinPrice = 0;
     final paddedMaxPrice = isPriceFlat ? maxPrice + priceRange * 0.5 : maxPrice + priceRange * 0.2;
     final paddedPriceRange = paddedMaxPrice - paddedMinPrice;
 
@@ -886,6 +753,10 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
     }
 
     Widget getSideTitleWidget(double value, TitleMeta meta, bool isLeft) {
+      if (value != meta.min && value != meta.max) {
+        return const SizedBox.shrink();
+      }
+
       final style = TextStyle(
         fontSize: 10,
         color: (isLeft ? Colors.greenAccent : Colors.redAccent).withAlpha(178),
@@ -893,7 +764,7 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
 
       String titleText;
       if (isLeft) {
-        titleText = '${value.toStringAsFixed(0)}g';
+        titleText = value.toStringAsFixed(0);
       } else {
         final denormalized = minQuantity + (value - paddedMinPrice) * quantityRange / paddedPriceRange;
         titleText = NumberFormat.compact().format(max(0, denormalized));
@@ -904,7 +775,9 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
 
     return SizedBox(
         height: 90,
-        child: LineChart(
+        child: Stack(
+          children: [
+            LineChart(
             LineChartData(
                 gridData: const FlGridData(show: false),
                 borderData: FlBorderData(show: false),
@@ -915,17 +788,44 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
                       getTooltipColor: (touchedSpot) => Colors.black.withAlpha(204),
                       fitInsideHorizontally: true, fitInsideVertically: true,
                       getTooltipItems: (touchedSpots) {
-                          final spotIndex = touchedSpots.first.spotIndex;
-                          if (spotIndex >= sortedKeys.length) return [];
-                          final date = DateFormat('dd.MM HH:mm').format(DateTime.parse(sortedKeys[spotIndex]));
-                          List<LineTooltipItem> finalItems = [LineTooltipItem(date, const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold))];
-                          if (spotIndex < priceSpots.length) {
-                              finalItems.add(LineTooltipItem('${priceSpots[spotIndex].y.toStringAsFixed(2)} g', const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12)));
-                          }
-                          if (showQuantityLine && spotIndex < quantitySpotsRaw.length) {
-                              finalItems.add(LineTooltipItem('${NumberFormat.compact().format(quantitySpotsRaw[spotIndex].y)} шт', const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)));
-                          }
-                          return finalItems;
+                          if (touchedSpots.isEmpty) return [];
+                          return touchedSpots.map((spot) {
+                              if (spot != touchedSpots.first) return null;
+
+                              final spotIndex = spot.spotIndex;
+                              if (spotIndex >= sortedKeys.length) return null;
+                              
+                              final keyString = sortedKeys[spotIndex];
+                              DateTime? parsedDate = DateTime.tryParse(keyString);
+                              
+                              if (parsedDate == null && keyString.length == 13 && keyString.contains(' ')) {
+                                  final fixedString = keyString.replaceFirst(' ', 'T') + ':00:00';
+                                  parsedDate = DateTime.tryParse(fixedString);
+                              }
+                              
+                              final finalDate = parsedDate ?? DateTime.now();
+                              final date = DateFormat('dd.MM HH:mm').format(finalDate);
+
+                              final children = <TextSpan>[];
+                              if (showQuantityLine && spotIndex < quantitySpotsRaw.length) {
+                                  children.add(TextSpan(
+                                      text: '${NumberFormat.compact().format(quantitySpotsRaw[spotIndex].y)}\n',
+                                      style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                                  ));
+                              }
+                              if (spotIndex < priceSpots.length) {
+                                  children.add(TextSpan(
+                                      text: priceSpots[spotIndex].y.toStringAsFixed(2),
+                                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                                  ));
+                              }
+
+                              return LineTooltipItem(
+                                  '$date\n',
+                                  const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                  children: children,
+                              );
+                          }).toList();
                       },
                   ),
                 ),
@@ -936,7 +836,7 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
                     leftTitles: AxisTitles(
                         sideTitles: SideTitles(
                             showTitles: true,
-                            reservedSize: 40,
+                            reservedSize: 60,
                             interval: paddedPriceRange / 2 * 1.05,
                             getTitlesWidget: (v, m) => getSideTitleWidget(v, m, true),
                         ),
@@ -944,7 +844,7 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
                     rightTitles: AxisTitles(
                         sideTitles: showQuantityLine ? SideTitles(
                             showTitles: true,
-                            reservedSize: 40,
+                            reservedSize: 45,
                             interval: paddedPriceRange / 2 * 1.05,
                             getTitlesWidget: (v, m) => getSideTitleWidget(v, m, false),
                         ) : const SideTitles(showTitles: false),
@@ -972,6 +872,31 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
                         ),
                 ],
             ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 60,
+                child: Text(
+                  item.weightedAveragePrice != null ? item.weightedAveragePrice!.toStringAsFixed(2) : '-',
+                  style: const TextStyle(color: Colors.greenAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.left,
+                ),
+              ),
+            ),
+            if (showQuantityLine)
+              Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox(
+                  width: 45,
+                  child: Text(
+                    NumberFormat.compact().format(item.totalQuantityHistory?.values.last ?? 0),
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+              ),
+          ],
         ),
     );
 }
