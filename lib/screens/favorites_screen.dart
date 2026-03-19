@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
@@ -443,7 +444,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           Expanded(
               flex: 3,
               child: Center(
-                  child: Text('График цен', style: theme.textTheme.titleMedium))),
+                  child: Text('График', style: theme.textTheme.titleMedium))),
           SizedBox(
             width: 150,
             child: Text('Инвестиции', 
@@ -480,8 +481,11 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4.0),
+      margin: const EdgeInsets.symmetric(vertical: 2.0),
       elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4.0),
+      ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
         child: Row(
@@ -522,7 +526,7 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                 ),
               ),
             ),
-            Expanded(flex: 3, child: _buildPriceHistoryChart(widget.item)),
+            Expanded(flex: 3, child: _buildPriceHistoryChart(context, widget.item)),
             SizedBox(
               width: 150,
               child: Row(
@@ -629,7 +633,7 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
     final priceController = TextEditingController(text: averagePrice > 0 ? averagePrice.toStringAsFixed(2) : '');
     final formKey = GlobalKey<FormState>();
 
-    if (!mounted) return;
+    if (!context.mounted) return;
 
     showDialog(
       context: context,
@@ -694,7 +698,7 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
 
                   await batch.commit();
                   
-                  if(mounted) {
+                  if(context.mounted) {
                     Navigator.of(context).pop();
                      ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -822,101 +826,155 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
     );
   }
 
-  Widget _buildPriceHistoryChart(AuctionItem item) {
+Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
     final priceHistory = item.averagePriceHistory;
+    final quantityHistory = item.totalQuantityHistory;
 
-    if (priceHistory == null || priceHistory.isEmpty) {
-        return Center(child: Text('-', style: TextStyle(color: Colors.grey[600])));
+    if (priceHistory == null || priceHistory.length < 2) {
+        return Center(child: Text('Недостаточно данных', style: TextStyle(color: Colors.grey[600])));
     }
 
     final sortedKeys = priceHistory.keys.toList()..sort();
 
     List<FlSpot> priceSpots = [];
-    double minPrice = double.maxFinite;
-    double maxPrice = double.minPositive;
+    List<FlSpot> quantitySpotsRaw = [];
+    double minPrice = double.maxFinite, maxPrice = double.minPositive;
+    double minQuantity = double.maxFinite, maxQuantity = double.minPositive;
 
     for (var i = 0; i < sortedKeys.length; i++) {
         final key = sortedKeys[i];
         final priceValue = priceHistory[key];
+        final quantityValue = quantityHistory?[key];
 
         if (priceValue != null) {
             final doublePrice = priceValue.toDouble();
             priceSpots.add(FlSpot(i.toDouble(), doublePrice));
-            if (doublePrice < minPrice) minPrice = doublePrice;
-            if (doublePrice > maxPrice) maxPrice = doublePrice;
+            minPrice = min(minPrice, doublePrice);
+            maxPrice = max(maxPrice, doublePrice);
+        }
+
+        if (quantityValue != null) {
+            final doubleQuantity = quantityValue.toDouble();
+            quantitySpotsRaw.add(FlSpot(i.toDouble(), doubleQuantity));
+            minQuantity = min(minQuantity, doubleQuantity);
+            maxQuantity = max(maxQuantity, doubleQuantity);
+        }
+    }
+    
+    final bool showQuantityLine = quantitySpotsRaw.length > 1;
+    final bool isPriceFlat = (maxPrice - minPrice).abs() < 0.01;
+    final bool isQuantityFlat = (maxQuantity - minQuantity).abs() < 0.01;
+
+    final priceRange = !isPriceFlat ? (maxPrice - minPrice) : 1.0;
+    final paddedMinPrice = isPriceFlat ? minPrice - priceRange * 0.5 : minPrice - priceRange * 0.2;
+    final paddedMaxPrice = isPriceFlat ? maxPrice + priceRange * 0.5 : maxPrice + priceRange * 0.2;
+    final paddedPriceRange = paddedMaxPrice - paddedMinPrice;
+
+    final quantityRange = !isQuantityFlat ? (maxQuantity - minQuantity) : 1.0;
+
+    List<FlSpot> quantitySpotsNormalized = [];
+    if (showQuantityLine) {
+        if (!isQuantityFlat) {
+            quantitySpotsNormalized = quantitySpotsRaw.map((spot) {
+                final normalizedY = paddedMinPrice + (spot.y - minQuantity) * paddedPriceRange / quantityRange;
+                return FlSpot(spot.x, normalizedY);
+            }).toList();
+        } else {
+            final avgPrice = (paddedMinPrice + paddedMaxPrice) / 2;
+            quantitySpotsNormalized = quantitySpotsRaw.map((spot) => FlSpot(spot.x, avgPrice)).toList();
         }
     }
 
-    if (priceSpots.length < 2) {
-        return Center(child: Text('Недостаточно данных', style: TextStyle(color: Colors.grey[600])));
+    Widget getSideTitleWidget(double value, TitleMeta meta, bool isLeft) {
+      final style = TextStyle(
+        fontSize: 10,
+        color: (isLeft ? Colors.greenAccent : Colors.redAccent).withAlpha(178),
+      );
+
+      String titleText;
+      if (isLeft) {
+        titleText = '${value.toStringAsFixed(0)}g';
+      } else {
+        final denormalized = minQuantity + (value - paddedMinPrice) * quantityRange / paddedPriceRange;
+        titleText = NumberFormat.compact().format(max(0, denormalized));
+      }
+      
+      return Text(titleText, style: style, textAlign: isLeft ? TextAlign.left : TextAlign.right);
     }
 
-    final priceAxisInterval = (maxPrice - minPrice) / 4;
-
     return SizedBox(
-        height: 60,
+        height: 90,
         child: LineChart(
             LineChartData(
                 gridData: const FlGridData(show: false),
-                titlesData: const FlTitlesData(show: false), 
                 borderData: FlBorderData(show: false),
-
+                minY: paddedMinPrice,
+                maxY: paddedMaxPrice,
                 lineTouchData: LineTouchData(
-                    touchTooltipData: LineTouchTooltipData(
-                        getTooltipColor: (touchedSpot) => const Color(0xFF343a40),
-                        fitInsideHorizontally: true,
-                        fitInsideVertically: true,
-                        getTooltipItems: (touchedSpots) {
-                            return touchedSpots.map((spot) {
-                                final date = DateFormat('dd MMM').format(DateTime.parse(sortedKeys[spot.spotIndex]));
-                                final text = '${spot.y.toStringAsFixed(2)} g';
-                                final color = Colors.greenAccent;
-                                
-                                return LineTooltipItem(
-                                    '$date\n$text',
-                                    TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
-                                );
-                            }).toList();
-                        },
+                  touchTooltipData: LineTouchTooltipData(
+                      getTooltipColor: (touchedSpot) => Colors.black.withAlpha(204),
+                      fitInsideHorizontally: true, fitInsideVertically: true,
+                      getTooltipItems: (touchedSpots) {
+                          final spotIndex = touchedSpots.first.spotIndex;
+                          if (spotIndex >= sortedKeys.length) return [];
+                          final date = DateFormat('dd.MM HH:mm').format(DateTime.parse(sortedKeys[spotIndex]));
+                          List<LineTooltipItem> finalItems = [LineTooltipItem(date, const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold))];
+                          if (spotIndex < priceSpots.length) {
+                              finalItems.add(LineTooltipItem('${priceSpots[spotIndex].y.toStringAsFixed(2)} g', const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12)));
+                          }
+                          if (showQuantityLine && spotIndex < quantitySpotsRaw.length) {
+                              finalItems.add(LineTooltipItem('${NumberFormat.compact().format(quantitySpotsRaw[spotIndex].y)} шт', const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)));
+                          }
+                          return finalItems;
+                      },
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                    show: true,
+                    bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 40,
+                            interval: paddedPriceRange / 2 * 1.05,
+                            getTitlesWidget: (v, m) => getSideTitleWidget(v, m, true),
+                        ),
+                    ),
+                    rightTitles: AxisTitles(
+                        sideTitles: showQuantityLine ? SideTitles(
+                            showTitles: true,
+                            reservedSize: 40,
+                            interval: paddedPriceRange / 2 * 1.05,
+                            getTitlesWidget: (v, m) => getSideTitleWidget(v, m, false),
+                        ) : const SideTitles(showTitles: false),
                     ),
                 ),
-
-                minY: minPrice - priceAxisInterval * 0.5,
-                maxY: maxPrice + priceAxisInterval * 0.5,
-                
-                extraLinesData: ExtraLinesData(
-                  horizontalLines: [
-                    HorizontalLine(
-                      y: minPrice, 
-                      color: Colors.greenAccent.withOpacity(0.3), 
-                      strokeWidth: 1,
-                      dashArray: [5, 5],
-                    ),
-                    HorizontalLine(
-                      y: maxPrice,
-                      color: Colors.greenAccent.withOpacity(0.3),
-                      strokeWidth: 1,
-                      dashArray: [5, 5],
-                    ),
-                  ]
-                ),
-
                 lineBarsData: [
                     LineChartBarData(
                         spots: priceSpots,
                         isCurved: true,
                         color: Colors.greenAccent,
-                        barWidth: 2.5,
+                        barWidth: 2,
                         isStrokeCapRound: true,
                         dotData: const FlDotData(show: false),
-                        belowBarData: BarAreaData(show: true, color: Colors.greenAccent.withAlpha(50)),
+                        belowBarData: BarAreaData(show: true, color: Colors.greenAccent.withAlpha(40)),
                     ),
+                    if (showQuantityLine)
+                        LineChartBarData(
+                            spots: quantitySpotsNormalized,
+                            isCurved: true,
+                            color: Colors.redAccent,
+                            barWidth: 2,
+                            isStrokeCapRound: true,
+                            dotData: const FlDotData(show: false),
+                            belowBarData: BarAreaData(show: false),
+                        ),
                 ],
             ),
         ),
     );
 }
-
 
 
   Future<void> _clearSingleItemHistory(BuildContext context, AuctionItem item) async {

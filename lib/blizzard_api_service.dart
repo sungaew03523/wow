@@ -260,6 +260,11 @@ class BlizzardApiService {
           ? totalCostForWeightedAverage / accumulatedQuantity
           : minimalCost;
 
+      // Округление всех цен до 2 знаков после запятой
+      weightedAveragePrice = (weightedAveragePrice * 100).round() / 100.0;
+      marketPrice = (marketPrice * 100).round() / 100.0;
+      minimalCost = (minimalCost * 100).round() / 100.0;
+
       developer.log("--- ИТОГ для ID: $itemId ---");
       developer.log("  Цена стены (Market Price): ${marketPrice.toStringAsFixed(2)}");
       developer.log("  Средневзвешенная цена (Weighted Avg): ${weightedAveragePrice.toStringAsFixed(2)}");
@@ -277,13 +282,13 @@ class BlizzardApiService {
         final now = DateTime.now();
         final timestampKey = DateFormat('yyyy-MM-dd HH').format(now);
         
-        priceHistory[timestampKey] = weightedAveragePrice;
+        priceHistory[timestampKey] = weightedAveragePrice; // Уже округлено
         quantityHistory[timestampKey] = totalItemQuantity;
 
         transaction.update(docRef, {
-          'minimalCost': minimalCost,
-          'marketPrice': marketPrice,
-          'weightedAveragePrice': weightedAveragePrice,
+          'minimalCost': minimalCost, // Уже округлено
+          'marketPrice': marketPrice, // Уже округлено
+          'weightedAveragePrice': weightedAveragePrice, // Уже округлено
           'averagePriceHistory': priceHistory,
           'totalQuantityHistory': quantityHistory,
         });
