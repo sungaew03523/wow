@@ -832,3 +832,22 @@ When requested for Firebase add the following the server configurations to .idx/
         }
     }
 }
+
+## **User Preferences & Project Workflows**
+
+To ensure a consistent development experience for the user across different machines, the AI agent MUST follow these specific preferences:
+
+### **Git Commit Strategy**
+- **Trigger**: Whenever the user asks to "make a commit" or "commit changes".
+- **Action**: Always run `git add .` before committing.
+- **Naming Convention**: The commit message MUST always be the current date and time in the format: `YYYY-MM-DD HH:MM:SS`.
+- **Example**: `git commit -m "2024-03-20 14:30:05"`
+
+### **Deployment Workflow**
+- **Trigger**: The keyword "опубликуй".
+- **Action**: Execute `flutter build web --release --wasm && firebase deploy --only hosting --project wow-07031761-fffab`.
+- **Context**: This project uses standard Firebase Hosting (classic) to remain on the free Spark plan as per user preference.
+
+### **Communication & Task Management**
+- **Language**: All task-related communications (Task Name, Summary, Status) and general conversation MUST be in **Russian**.
+- **Visibility**: Always use the `task_boundary` tool for any code modifications to provide transparent progress updates in Russian.

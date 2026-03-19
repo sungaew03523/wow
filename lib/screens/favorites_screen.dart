@@ -290,25 +290,47 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             const Divider(color: Colors.grey, height: 1),
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream: _favoritesStream,
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Ошибка: ${snapshot.error}'));
+                stream: _firestore.collection('investments').snapshots(),
+                builder: (context, investSnapshot) {
+                  final allInvestments = investSnapshot.data?.docs ?? [];
+                  
+                  // Группируем инвестиции по itemId для быстрого доступа
+                  final Map<String, List<DocumentSnapshot>> investmentsByItem = {};
+                  for (var doc in allInvestments) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    final itemId = data['itemId'] as String?;
+                    if (itemId != null) {
+                      investmentsByItem.putIfAbsent(itemId, () => []).add(doc);
+                    }
                   }
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final favoriteDocs = snapshot.data?.docs ?? [];
-                  if (favoriteDocs.isEmpty) {
-                    return const Center(
-                        child: Text('Нет избранных предметов.'));
-                  }
-                  return ListView.builder(
-                    itemCount: favoriteDocs.length,
-                    itemBuilder: (context, index) {
-                      final item =
-                          AuctionItem.fromFirestore(favoriteDocs[index]);
-                      return FavoriteItemRow(item: item, key: ValueKey(item.id));
+
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: _favoritesStream,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(child: Text('Ошибка: ${snapshot.error}'));
+                      }
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final favoriteDocs = snapshot.data?.docs ?? [];
+                      if (favoriteDocs.isEmpty) {
+                        return const Center(
+                            child: Text('Нет избранных предметов.'));
+                      }
+                      return ListView.builder(
+                        itemCount: favoriteDocs.length,
+                        itemBuilder: (context, index) {
+                          final item =
+                              AuctionItem.fromFirestore(favoriteDocs[index]);
+                          final itemInvestments = investmentsByItem[item.id.toString()] ?? [];
+                          return FavoriteItemRow(
+                            item: item, 
+                            itemInvestments: itemInvestments,
+                            key: ValueKey(item.id),
+                          );
+                        },
+                      );
                     },
                   );
                 },
@@ -403,8 +425,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
 class FavoriteItemRow extends StatefulWidget {
   final AuctionItem item;
+  final List<DocumentSnapshot> itemInvestments;
 
-  const FavoriteItemRow({required this.item, super.key});
+  const FavoriteItemRow({
+    required this.item, 
+    required this.itemInvestments,
+    super.key,
+  });
 
   @override
   State<FavoriteItemRow> createState() => _FavoriteItemRowState();
@@ -477,7 +504,7 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                     tooltip: 'Добавить/Изменить покупку',
                     onPressed: () => _showAddInvestmentDialog(context, widget.item),
                   ),
-                  _buildProfitDisplay(widget.item),
+                  _buildProfitDisplay(widget.item, widget.itemInvestments),
                 ],
               ),
             ),
@@ -628,67 +655,51 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
     );
   }
 
-  Widget _buildProfitDisplay(AuctionItem item) {
-    final Stream<QuerySnapshot> investmentStream = _firestore
-        .collection('investments')
-        .where('itemId', isEqualTo: item.id.toString())
-        .snapshots();
+  Widget _buildProfitDisplay(AuctionItem item, List<DocumentSnapshot> snapshots) {
+    if (snapshots.isEmpty) {
+      return Text('0 g', style: Theme.of(context).textTheme.bodyLarge);
+    }
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: investmentStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-          return const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2));
-        }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Text('0 g', style: Theme.of(context).textTheme.bodyLarge);
-        }
-        if (snapshot.hasError) {
-          return const Tooltip(message: "Ошибка", child: Icon(Icons.error_outline, color: Colors.red, size: 18));
-        }
+    int totalQuantity = 0;
+    double totalCost = 0;
 
-        int totalQuantity = 0;
-        double totalCost = 0;
+    for (var doc in snapshots) {
+      final data = doc.data() as Map<String, dynamic>;
+      totalQuantity += (data['quantity'] as int?) ?? 0;
+      final price = (data['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+      final qty = (data['quantity'] as int?) ?? 0;
+      totalCost += price * qty;
+    }
+    
+    final currentWeightedPrice = item.weightedAveragePrice;
+    if (currentWeightedPrice == null || totalQuantity == 0) {
+      return Text('0 g', style: Theme.of(context).textTheme.bodyLarge);
+    }
 
-        for (var doc in snapshot.data!.docs) {
-          final data = doc.data() as Map<String, dynamic>;
-          totalQuantity += (data['quantity'] as int?) ?? 0;
-          final price = (data['purchasePrice'] as num?)?.toDouble() ?? 0.0;
-          final qty = (data['quantity'] as int?) ?? 0;
-          totalCost += price * qty;
-        }
-        
-        final currentWeightedPrice = item.weightedAveragePrice;
-        if (currentWeightedPrice == null || totalQuantity == 0) {
-          return Text('0 g', style: Theme.of(context).textTheme.bodyLarge);
-        }
+    final currentValue = (currentWeightedPrice * totalQuantity) * 0.95; // -5% commission
+    final profit = currentValue - totalCost;
+    
+    final profitColor = profit >= 0 ? Colors.greenAccent : Colors.redAccent;
+    final profitSign = profit > 0 ? '+' : '';
 
-        final currentValue = (currentWeightedPrice * totalQuantity) * 0.95; // -5% commission
-        final profit = currentValue - totalCost;
-        
-        final profitColor = profit >= 0 ? Colors.greenAccent : Colors.redAccent;
-        final profitSign = profit > 0 ? '+' : '';
-
-        return Tooltip(
-          message: 'Всего куплено: $totalQuantity шт.\nСредняя цена покупки: ${(totalCost / totalQuantity).toStringAsFixed(2)} g',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-               Text(
-                '${totalCost.toStringAsFixed(0)} g',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.amber, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '$profitSign${profit.toStringAsFixed(0)} g',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: profitColor, fontWeight: FontWeight.bold),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          )
-        );
-      },
+    return Tooltip(
+      message: 'Всего куплено: $totalQuantity шт.\nСредняя цена покупки: ${(totalCost / totalQuantity).toStringAsFixed(2)} g',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+           Text(
+            '${totalCost.toStringAsFixed(0)} g',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.amber, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$profitSign${profit.toStringAsFixed(0)} g',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: profitColor, fontWeight: FontWeight.bold),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      )
     );
   }
 
@@ -799,7 +810,7 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
                               DateTime? parsedDate = DateTime.tryParse(keyString);
                               
                               if (parsedDate == null && keyString.length == 13 && keyString.contains(' ')) {
-                                  final fixedString = keyString.replaceFirst(' ', 'T') + ':00:00';
+                                  final fixedString = '${keyString.replaceFirst(' ', 'T')}:00:00';
                                   parsedDate = DateTime.tryParse(fixedString);
                               }
                               

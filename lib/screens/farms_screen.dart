@@ -59,6 +59,8 @@ class _FarmsScreenState extends State<FarmsScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   Key _listViewKey = UniqueKey();
   bool _isPriceUpdating = false;
+  // Хранит ручные переопределения цен: {farmId: {itemName: manualPrice}}
+  final Map<String, Map<String, double>> _priceOverrides = {};
 
   final List<String> _professions = [
     'Алхимия',
@@ -494,36 +496,51 @@ class _FarmsScreenState extends State<FarmsScreen> {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore
-            .collection('farms')
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const Center(child: Text('Что-то пошло не так'));
+        stream: _firestore.collection('favorites').snapshots(),
+        builder: (context, favoritesSnapshot) {
+          if (favoritesSnapshot.hasError) {
+            return const Center(child: Text('Ошибка загрузки цен'));
           }
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (favoritesSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final farmDocs = snapshot.data?.docs ?? [];
-          if (farmDocs.isEmpty) {
-            return const Center(
-              child: Text(
-                'Пока нет ни одного фарма. Нажмите "+", чтобы добавить.',
-                style: TextStyle(color: Colors.grey, fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-            );
-          }
+          final favoritesMap = {
+            for (var doc in favoritesSnapshot.data!.docs)
+              (doc.data() as Map<String, dynamic>)['name'] as String: AuctionItem.fromFirestore(doc)
+          };
 
-          return ListView.builder(
-            key: _listViewKey,
-            padding: const EdgeInsets.all(8.0),
-            itemCount: farmDocs.length,
-            itemBuilder: (context, index) {
-              final farm = Farm.fromFirestore(farmDocs[index]);
-              return Card(
+          return StreamBuilder<QuerySnapshot>(
+            stream: _firestore
+                .collection('farms')
+                .orderBy('createdAt', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const Center(child: Text('Что-то пошло не так'));
+              }
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final farmDocs = snapshot.data?.docs ?? [];
+              if (farmDocs.isEmpty) {
+                return const Center(
+                  child: Text(
+                    'Пока нет ни одного фарма. Нажмите "+", чтобы добавить.',
+                    style: TextStyle(color: Colors.grey, fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                key: _listViewKey,
+                padding: const EdgeInsets.all(8.0),
+                itemCount: farmDocs.length,
+                itemBuilder: (context, index) {
+                  final farm = Farm.fromFirestore(farmDocs[index]);
+                  return Card(
                 margin: const EdgeInsets.symmetric(
                   vertical: 8.0,
                   horizontal: 4.0,
@@ -592,11 +609,27 @@ class _FarmsScreenState extends State<FarmsScreen> {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const Divider(),
-                      FarmComponentsList(formula: farm.formula),
-                      const Divider(),
+                      FarmComponentsList(
+                        formula: farm.formula,
+                        favorites: favoritesMap,
+                        overrides: _priceOverrides[farm.id] ?? {},
+                        onOverrideChanged: (itemName, newPrice) {
+                          setState(() {
+                            if (newPrice == null) {
+                              _priceOverrides[farm.id]?.remove(itemName);
+                            } else {
+                              _priceOverrides[farm.id] ??= {};
+                              _priceOverrides[farm.id]![itemName] = newPrice;
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
                       FarmProfitCalculator(
                         formula: farm.formula,
+                        favorites: favoritesMap,
                         craftsCount: farm.craftsCount,
+                        overrides: _priceOverrides[farm.id] ?? {},
                       ),
                     ],
                   ),
@@ -605,7 +638,9 @@ class _FarmsScreenState extends State<FarmsScreen> {
             },
           );
         },
-      ),
+      );
+    },
+  ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showFarmDialog(),
         tooltip: 'Добавить фарм',
@@ -616,284 +651,223 @@ class _FarmsScreenState extends State<FarmsScreen> {
 }
 
 // --- Виджет для расчета прибыли ---
-class FarmProfitCalculator extends StatefulWidget {
+class FarmProfitCalculator extends StatelessWidget {
   final String formula;
   final int craftsCount;
+  final Map<String, AuctionItem> favorites;
+  final Map<String, double> overrides;
 
   const FarmProfitCalculator({
     super.key,
     required this.formula,
     required this.craftsCount,
+    required this.favorites,
+    required this.overrides,
   });
 
   @override
-  State<FarmProfitCalculator> createState() => _FarmProfitCalculatorState();
-}
+  Widget build(BuildContext context) {
+    if (formula.isEmpty) return const SizedBox.shrink();
 
-class _FarmProfitCalculatorState extends State<FarmProfitCalculator> {
-  late Future<double> _profitFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _profitFuture = _calculateProfit();
-  }
-
-  @override
-  void didUpdateWidget(covariant FarmProfitCalculator oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.formula != widget.formula ||
-        oldWidget.craftsCount != widget.craftsCount) {
-      setState(() {
-        _profitFuture = _calculateProfit();
-      });
+    final itemNames = _extractItemNames(formula);
+    
+    // Подготовка цен из переданной мапы favorites
+    final Map<String, double> effectivePrices = {};
+    for (String name in itemNames) {
+      if (overrides.containsKey(name)) {
+        effectivePrices[name] = overrides[name]!;
+      } else {
+        effectivePrices[name] = favorites[name]?.weightedAveragePrice ?? 0.0;
+      }
     }
-  }
 
-  Future<double> _calculateProfit() async {
-    if (widget.formula.isEmpty) return 0.0;
-
-    final itemNames = _extractItemNames(widget.formula);
-    final itemPrices = await _getItemPricesFromFirestore(itemNames);
-
-    String formulaWithPrices = widget.formula;
+    String formulaWithPrices = formula;
     for (String name in itemNames) {
       formulaWithPrices =
-          formulaWithPrices.replaceAll('"$name"', itemPrices[name]?.toString() ?? '0');
+          formulaWithPrices.replaceAll('"$name"', effectivePrices[name]?.toString() ?? '0');
     }
 
+    double profit = 0;
+    String? error;
     try {
-      final profitPerCraft = formulaWithPrices.interpret().toDouble();
-      return profitPerCraft; 
+      profit = formulaWithPrices.interpret().toDouble();
     } catch (e) {
-      throw Exception(
-          'Ошибка при вычислении формулы: $e. Обработанная формула: $formulaWithPrices');
+      error = e.toString();
     }
+
+    if (error != null) {
+      return Tooltip(
+          message: error,
+          child: Text('Прибыль за крафт: Ошибка',
+              style: TextStyle(color: Colors.orange.shade800)));
+    }
+
+    return Text(
+      'Прибыль за крафт: ${profit.toStringAsFixed(2)} з',
+      style: TextStyle(
+          color: profit > 0 ? Colors.green.shade600 : Colors.red.shade600,
+          fontWeight: FontWeight.bold,
+          fontSize: 16),
+    );
   }
 
   Set<String> _extractItemNames(String formula) {
     final RegExp regex = RegExp(r'"([^"]+)"');
     return regex.allMatches(formula).map((m) => m.group(1)!).toSet();
   }
-
-  Future<Map<String, double>> _getItemPricesFromFirestore(
-      Set<String> itemNames) async {
-    if (itemNames.isEmpty) return {};
-
-    final Map<String, double> prices = {};
-    final namesList = itemNames.toList();
-
-    for (var i = 0; i < namesList.length; i += 30) {
-      final chunk = namesList.sublist(
-          i, i + 30 > namesList.length ? namesList.length : i + 30);
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('favorites')
-          .where('name', whereIn: chunk)
-          .get();
-
-      for (final doc in querySnapshot.docs) {
-        final data = doc.data();
-        final name = data['name'] as String?;
-        final price = (data['weightedAveragePrice'] as num?)?.toDouble();
-        if (name != null && price != null) {
-          prices[name] = price;
-        }
-      }
-    }
-    return prices;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<double>(
-      future: _profitFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Row(children: [
-            Text('Прибыль за крафт: '),
-            SizedBox(width: 8),
-            SizedBox(
-                height: 16,
-                width: 16,
-                child: CircularProgressIndicator(strokeWidth: 2))
-          ]);
-        }
-        if (snapshot.hasError) {
-          return Tooltip(
-              message: snapshot.error.toString(),
-              child: Text('Прибыль за крафт: Ошибка',
-                  style: TextStyle(color: Colors.orange.shade800)));
-        }
-        if (!snapshot.hasData) {
-          return const Text('Прибыль за крафт: Не удалось рассчитать');
-        }
-
-        final profit = snapshot.data!;
-        return Text(
-          'Прибыль за крафт: ${profit.toStringAsFixed(2)} з',
-          style: TextStyle(
-              color: profit > 0 ? Colors.green.shade600 : Colors.red.shade600,
-              fontWeight: FontWeight.bold,
-              fontSize: 16),
-        );
-      },
-    );
-  }
 }
 
 // --- КОМПАКТНЫЙ ВИДЖЕТ ДЛЯ ОТОБРАЖЕНИЯ КОМПОНЕНТОВ ---
-class FarmComponentsList extends StatefulWidget {
+class FarmComponentsList extends StatelessWidget {
   final String formula;
+  final Map<String, AuctionItem> favorites;
+  final Map<String, double> overrides;
+  final Function(String itemName, double? newPrice) onOverrideChanged;
 
-  const FarmComponentsList({super.key, required this.formula});
-
-  @override
-  State<FarmComponentsList> createState() => _FarmComponentsListState();
-}
-
-class _FarmComponentsListState extends State<FarmComponentsList> {
-  late Future<List<Map<String, dynamic>>> _componentsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _componentsFuture = _prepareComponentsData();
-  }
-
-  @override
-  void didUpdateWidget(covariant FarmComponentsList oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.formula != widget.formula) {
-      setState(() {
-        _componentsFuture = _prepareComponentsData();
-      });
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> _prepareComponentsData() async {
-    if (widget.formula.isEmpty) return [];
-
-    final nameRegex = RegExp(r'"([^"]+)"');
-    final allItemNames =
-        nameRegex.allMatches(widget.formula).map((m) => m.group(1)!).toSet();
-
-    if (allItemNames.isEmpty) return [];
-
-    final itemsData = await _getItemsDataFromFirestore(allItemNames);
-
-    final List<Map<String, dynamic>> components = [];
-    for (final name in allItemNames) {
-      final itemData = itemsData[name];
-      if (itemData != null) {
-        components.add({
-          'name': name,
-          'price': (itemData['price'] as num?)?.toDouble() ?? 0.0,
-          'iconUrl': itemData['iconUrl'] as String?,
-        });
-      }
-    }
-
-    components.sort((a, b) => a['name'].compareTo(b['name']));
-
-    return components;
-  }
-
-  Future<Map<String, dynamic>> _getItemsDataFromFirestore(
-      Set<String> itemNames) async {
-    if (itemNames.isEmpty) return {};
-    final Map<String, dynamic> items = {};
-    final namesList = itemNames.toList();
-
-    for (var i = 0; i < namesList.length; i += 30) {
-      final chunk = namesList.sublist(
-          i, i + 30 > namesList.length ? namesList.length : i + 30);
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('favorites')
-          .where('name', whereIn: chunk)
-          .get();
-      for (final doc in querySnapshot.docs) {
-        final data = doc.data();
-        final name = data['name'] as String?;
-        if (name != null) {
-          items[name] = {
-            'price': (data['weightedAveragePrice'] as num?)?.toDouble() ?? 0.0,
-            'iconUrl': data['iconUrl'] as String?,
-          };
-        }
-      }
-    }
-    return items;
-  }
+  const FarmComponentsList({
+    super.key,
+    required this.formula,
+    required this.favorites,
+    required this.overrides,
+    required this.onOverrideChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _componentsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8.0),
-              child: Center(
-                  child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2))));
-        }
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox.shrink();
-        }
+    if (formula.isEmpty) return const SizedBox.shrink();
 
-        final components = snapshot.data!;
+    final RegExp nameRegex = RegExp(r'"([^"]+)"');
+    final allItemNames =
+        nameRegex.allMatches(formula).map((m) => m.group(1)!).toSet();
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
-              child: Text('Компоненты:',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontSize: 16)),
-            ),
-            Wrap(
-              spacing: 12.0,
-              runSpacing: 6.0,
-              children: components.map((component) {
-                final pricePerPiece = component['price'];
-                return Chip(
-                  avatar: CircleAvatar(
-                    radius: 11,
-                    backgroundColor: Colors.transparent,
-                    child: component['iconUrl'] != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(3.0),
-                            child: Image.network(
-                              component['iconUrl']!,
-                              width: 22,
-                              height: 22,
-                              fit: BoxFit.cover,
-                              errorBuilder: (c, o, s) =>
-                                  const Icon(Icons.inventory_2, size: 12),
-                            ),
-                          )
-                        : const Icon(Icons.inventory_2, size: 12),
-                  ),
-                  label: Text(
-                    '${component['name']}: ${pricePerPiece.toStringAsFixed(2)} з',
-                  ),
-                  labelStyle: const TextStyle(fontSize: 12),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity:
-                      const VisualDensity(horizontal: 0.0, vertical: -2),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    if (allItemNames.isEmpty) return const SizedBox.shrink();
+
+    final List<Map<String, dynamic>> components = [];
+    for (final name in allItemNames) {
+      final itemData = favorites[name];
+      components.add({
+        'name': name,
+        'price': itemData?.weightedAveragePrice ?? 0.0,
+        'iconUrl': itemData?.iconUrl,
+      });
+    }
+    components.sort((a, b) => a['name'].compareTo(b['name']));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+          child: Text('Компоненты:',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontSize: 16)),
+        ),
+        Wrap(
+          spacing: 12.0,
+          runSpacing: 6.0,
+          children: components.map((component) {
+            final String name = component['name'];
+            final bool isOverridden = overrides.containsKey(name);
+            final double pricePerPiece = isOverridden 
+                ? overrides[name]! 
+                : component['price'];
+
+            return InkWell(
+              onTap: () async {
+                final TextEditingController controller = TextEditingController(
+                  text: pricePerPiece.toStringAsFixed(2),
                 );
-              }).toList(),
-            ),
-          ],
-        );
-      },
+                final double? result = await showDialog<double>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text('Цена для "$name"'),
+                    content: TextField(
+                      controller: controller,
+                      decoration: const InputDecoration(
+                        labelText: 'Цена за 1 шт.',
+                        suffixText: 'з',
+                      ),
+                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      autofocus: true,
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Отмена'),
+                      ),
+                      if (isOverridden)
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, -1.0), // Сигнал сброса
+                          child: const Text('Сброс', style: TextStyle(color: Colors.orange)),
+                        ),
+                      ElevatedButton(
+                        onPressed: () {
+                          final val = double.tryParse(controller.text.replaceAll(',', '.'));
+                          Navigator.pop(context, val);
+                        },
+                        child: const Text('Применить'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (result != null) {
+                  if (result < 0) {
+                    onOverrideChanged(name, null);
+                  } else {
+                    onOverrideChanged(name, result);
+                  }
+                }
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Chip(
+                backgroundColor: isOverridden ? Colors.blue.withAlpha(40) : null,
+                side: isOverridden ? const BorderSide(color: Colors.blue, width: 1) : null,
+                avatar: CircleAvatar(
+                  radius: 11,
+                  backgroundColor: Colors.transparent,
+                  child: component['iconUrl'] != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(3.0),
+                          child: Image.network(
+                            component['iconUrl']!,
+                            width: 22,
+                            height: 22,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, o, s) =>
+                                const Icon(Icons.inventory_2, size: 12),
+                          ),
+                        )
+                      : const Icon(Icons.inventory_2, size: 12),
+                ),
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('$name: ${pricePerPiece.toStringAsFixed(2)} з'),
+                    if (isOverridden) 
+                      const Padding(
+                        padding: EdgeInsets.only(left: 4.0),
+                        child: Icon(Icons.edit_note, size: 14, color: Colors.blue),
+                      ),
+                  ],
+                ),
+                labelStyle: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isOverridden ? FontWeight.bold : FontWeight.normal,
+                  color: isOverridden ? Colors.blue.shade800 : null,
+                ),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity:
+                    const VisualDensity(horizontal: 0.0, vertical: -2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

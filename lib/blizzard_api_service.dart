@@ -177,7 +177,8 @@ class BlizzardApiService {
     if (itemsToUpdate.isEmpty) return;
 
     final token = await _getAccessToken();
-    final favoriteIds = itemsToUpdate.keys.toList();
+    // Оптимизация: используем Set для поиска за O(1)
+    final Set<int> favoriteIdsSet = itemsToUpdate.keys.map((id) => int.parse(id)).toSet();
     final Map<int, List<Map<String, dynamic>>> auctionsByItem = {};
 
     Uri? nextUri = Uri.https(
@@ -194,26 +195,24 @@ class BlizzardApiService {
 
       for (var auction in auctions) {
         final itemId = auction['item']?['id'] as int?;
-        if (itemId != null && favoriteIds.contains(itemId.toString())) {
+        // Оптимизация: быстрый поиск в Set
+        if (itemId != null && favoriteIdsSet.contains(itemId)) {
           auctionsByItem.putIfAbsent(itemId, () => []).add(auction);
         }
       }
-      final nextLink = data['_links']?['next']?['href'] as String?;
+      final nextLink = data['_links']?['_next']?['href'] as String? ?? data['_links']?['next']?['href'] as String?;
       nextUri = nextLink != null ? Uri.parse(nextLink) : null;
     }
 
-    developer.log("--- Начинаем новый расчет цен ---");
+    developer.log("Обработка данных аукциона для ${auctionsByItem.length} предметов...");
 
-    for (var itemIdStr in favoriteIds) {
-      final itemId = int.parse(itemIdStr);
-      final itemAuctions = auctionsByItem[itemId];
+    final WriteBatch batch = _firestore.batch();
+    final now = DateTime.now();
+    final timestampKey = DateFormat('yyyy-MM-dd HH').format(now);
 
-      developer.log("\n--- Обработка предмета ID: $itemId ---");
-
-      if (itemAuctions == null || itemAuctions.isEmpty) {
-        developer.log('Нет аукционов для предмета $itemId, пропуск.');
-        continue;
-      }
+    for (var itemId in auctionsByItem.keys) {
+      final itemAuctions = auctionsByItem[itemId]!;
+      if (itemAuctions.isEmpty) continue;
 
       int totalItemQuantity = 0;
       for (var auction in itemAuctions) {
@@ -224,21 +223,14 @@ class BlizzardApiService {
       if (targetVolume < 1) targetVolume = 1;
       if (targetVolume > 3000) targetVolume = 3000;
 
-      developer.log("Общее количество на аукционе: $totalItemQuantity, Целевой объем: $targetVolume");
-      
       itemAuctions.sort((a, b) => (a['unit_price'] as int).compareTo(b['unit_price'] as int));
 
       double minimalCost = (itemAuctions.first['unit_price'] as int) / 10000.0;
-      developer.log("Минимальная цена (самый дешевый лот): $minimalCost");
-
       int accumulatedQuantity = 0;
       double totalCostForWeightedAverage = 0;
       double marketPrice = minimalCost;
 
-      developer.log("Начинаем итерацию по отсортированным лотам:");
-      int lotCounter = 0;
       for (var auction in itemAuctions) {
-        lotCounter++;
         final quantity = auction['quantity'] as int;
         final unitPrice = (auction['unit_price'] as int) / 10000.0;
 
@@ -246,16 +238,11 @@ class BlizzardApiService {
           final quantityToConsider = (accumulatedQuantity + quantity) > targetVolume
               ? targetVolume - accumulatedQuantity
               : quantity;
-
-          developer.log("  Лот $lotCounter: Цена: $unitPrice, Кол-во: $quantity. Учитываем: $quantityToConsider");
           
           totalCostForWeightedAverage += quantityToConsider * unitPrice;
           accumulatedQuantity += quantityToConsider;
           marketPrice = unitPrice;
-
-          developer.log("    -> Накоплено кол-во: $accumulatedQuantity, Общая стоимость для среднего: ${totalCostForWeightedAverage.toStringAsFixed(2)}, Цена стены: $marketPrice");
         } else {
-           developer.log("  Лот $lotCounter: Цена: $unitPrice, Кол-во: $quantity. Пропускаем (объем $targetVolume достигнут).");
            break;
         }
       }
@@ -264,40 +251,26 @@ class BlizzardApiService {
           ? totalCostForWeightedAverage / accumulatedQuantity
           : minimalCost;
 
-      // Округление всех цен до 2 знаков после запятой
+      // Округление
       weightedAveragePrice = (weightedAveragePrice * 100).round() / 100.0;
       marketPrice = (marketPrice * 100).round() / 100.0;
       minimalCost = (minimalCost * 100).round() / 100.0;
 
-      developer.log("--- ИТОГ для ID: $itemId ---");
-      developer.log("  Цена стены (Market Price): ${marketPrice.toStringAsFixed(2)}");
-      developer.log("  Средневзвешенная цена (Weighted Avg): ${weightedAveragePrice.toStringAsFixed(2)}");
-      developer.log("  Общее количество: $totalItemQuantity");
-
-      final docRef = _firestore.collection('favorites').doc(itemIdStr);
-      await _firestore.runTransaction((transaction) async {
-        final docSnapshot = await transaction.get(docRef);
-        if (!docSnapshot.exists) return;
-
-        final data = docSnapshot.data() as Map<String, dynamic>;
-        final priceHistory = (data['averagePriceHistory'] as Map<String, dynamic>?) ?? {};
-        final quantityHistory = (data['totalQuantityHistory'] as Map<String, dynamic>?) ?? {};
-
-        final now = DateTime.now();
-        final timestampKey = DateFormat('yyyy-MM-dd HH').format(now);
-        
-        priceHistory[timestampKey] = weightedAveragePrice; // Уже округлено
-        quantityHistory[timestampKey] = totalItemQuantity;
-
-        transaction.update(docRef, {
-          'minimalCost': minimalCost, // Уже округлено
-          'marketPrice': marketPrice, // Уже округлено
-          'weightedAveragePrice': weightedAveragePrice, // Уже округлено
-          'averagePriceHistory': priceHistory,
-          'totalQuantityHistory': quantityHistory,
-        });
+      final docRef = _firestore.collection('favorites').doc(itemId.toString());
+      
+      // Оптимизация: используем обновление полей с точечной нотацией для мап. 
+      // Это работает атомарно без необходимости чтения документа (транзакции).
+      batch.update(docRef, {
+        'minimalCost': minimalCost,
+        'marketPrice': marketPrice,
+        'weightedAveragePrice': weightedAveragePrice,
+        'averagePriceHistory.$timestampKey': weightedAveragePrice,
+        'totalQuantityHistory.$timestampKey': totalItemQuantity,
+        'lastUpdated': FieldValue.serverTimestamp(),
       });
     }
-    developer.log("Цены и количество для ${favoriteIds.length} избранных предметов обновлены.");
+
+    await batch.commit();
+    developer.log("Все цены успешно обновлены пакетом.");
   }
 }
