@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'screens/home_screen.dart';
 import 'screens/favorites_screen.dart';
 import 'screens/farms_screen.dart';
+import 'screens/crafts_screen.dart';
 
 // --- Навигация ---
 final GoRouter router = GoRouter(
@@ -24,6 +25,12 @@ final GoRouter router = GoRouter(
       path: '/farms',
       builder: (BuildContext context, GoRouterState state) {
         return const FarmsScreen();
+      },
+    ),
+    GoRoute(
+      path: '/crafts',
+      builder: (BuildContext context, GoRouterState state) {
+        return const CraftsScreen();
       },
     ),
   ],
