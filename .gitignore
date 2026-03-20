@@ -29,3 +29,7 @@
 
 # Node
 /functions/node_modules
+
+# Temporary and Build Files
+.dart_tool/
+.firebase/
