@@ -24,5 +24,8 @@
 .pub/
 /build/
 
+# Dart tool Chrome device cache
+.dart_tool/chrome-device/
+
 # Node
 /functions/node_modules

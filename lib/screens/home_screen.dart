@@ -32,7 +32,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final price = await BlizzardApiService().fetchWowTokenPrice();
-      final docRef = FirebaseFirestore.instance.collection('settings').doc('wow_token_price');
+      final docRef = FirebaseFirestore.instance
+          .collection('settings')
+          .doc('wow_token_price');
 
       final now = DateTime.now().toUtc();
       final timestampKey = DateFormat("yyyy-MM-dd HH").format(now);
@@ -159,7 +161,8 @@ class _CustomAppBarState extends State<CustomAppBar> {
                 SizedBox(height: 10),
                 Text(
                   'Загрузка может занять несколько минут.',
-                  style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+                  style: TextStyle(
+                      fontStyle: FontStyle.italic, color: Colors.grey),
                 ),
               ],
             ),
@@ -186,7 +189,8 @@ class _CustomAppBarState extends State<CustomAppBar> {
     setState(() => _isBlizzardLoading = true);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Загрузка данных с Blizzard API началась...')),
+        const SnackBar(
+            content: Text('Загрузка данных с Blizzard API началась...')),
       );
     }
 
@@ -242,17 +246,20 @@ class _CustomAppBarState extends State<CustomAppBar> {
           children: [
             TextButton(
               onPressed: () => router.go('/favorites'),
-              child: const Text('Избранное', style: TextStyle(color: Color(0xFFD4BF7A), fontSize: 16)),
+              child: const Text('Избранное',
+                  style: TextStyle(color: Color(0xFFD4BF7A), fontSize: 16)),
             ),
             const SizedBox(width: 20),
             TextButton(
               onPressed: () => router.go('/farms'),
-              child: const Text('Фармы', style: TextStyle(color: Color(0xFFD4BF7A), fontSize: 16)),
+              child: const Text('Фармы',
+                  style: TextStyle(color: Color(0xFFD4BF7A), fontSize: 16)),
             ),
             const SizedBox(width: 20),
             TextButton(
               onPressed: () => router.go('/crafts'),
-              child: const Text('Крафты', style: TextStyle(color: Color(0xFFD4BF7A), fontSize: 16)),
+              child: const Text('Крафты',
+                  style: TextStyle(color: Color(0xFFD4BF7A), fontSize: 16)),
             ),
             const Spacer(),
             Expanded(
@@ -319,25 +326,29 @@ class CategoryPanel extends StatelessWidget {
                   .doc('wow_token_price')
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (!snapshot.hasData || !snapshot.data!.exists) {
-                  return const Text('Цена жетона не найдена.', style: TextStyle(color: Colors.grey));
+                  return const Text('Цена жетона не найдена.',
+                      style: TextStyle(color: Colors.grey));
                 }
-                
+
                 final docData = snapshot.data!.data() as Map<String, dynamic>?;
                 final prices = docData?['prices'] as Map<String, dynamic>?;
 
                 if (prices == null || prices.isEmpty) {
-                  return const Text('Нет данных о цене жетона.', style: TextStyle(color: Colors.grey));
+                  return const Text('Нет данных о цене жетона.',
+                      style: TextStyle(color: Colors.grey));
                 }
-                
+
                 final sortedKeys = prices.keys.toList()..sort();
                 final latestTimestampKey = sortedKeys.last;
                 final latestPrice = prices[latestTimestampKey];
 
-                final formattedPrice = NumberFormat("#,##0", "en_US").format(latestPrice);
+                final formattedPrice =
+                    NumberFormat("#,##0", "en_US").format(latestPrice);
 
                 final List<FlSpot> spots = [];
                 double minY = double.maxFinite;
@@ -357,7 +368,9 @@ class CategoryPanel extends StatelessWidget {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$formattedPrice g', style: textTheme.bodyLarge?.copyWith(fontSize: 20, color: Colors.greenAccent)),
+                    Text('$formattedPrice g',
+                        style: textTheme.bodyLarge?.copyWith(
+                            fontSize: 20, color: Colors.greenAccent)),
                     const SizedBox(height: 20),
                     SizedBox(
                       height: 100,
@@ -365,30 +378,42 @@ class CategoryPanel extends StatelessWidget {
                         LineChartData(
                           gridData: const FlGridData(show: false),
                           titlesData: const FlTitlesData(
-                            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            leftTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            rightTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            topTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
                           ),
                           borderData: FlBorderData(show: false),
                           lineTouchData: LineTouchData(
                             touchTooltipData: LineTouchTooltipData(
                               fitInsideHorizontally: true,
-                              getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
-                                return touchedBarSpots.map((barSpot) {
-                                  final spotIndex = barSpot.spotIndex;
-                                  if (spotIndex < 0 || spotIndex >= sortedKeys.length) {
-                                    return null;
-                                  }
-                                  
-                                  final date = DateFormat('yyyy-MM-dd HH').parse(sortedKeys[spotIndex]);
-                                  final price = barSpot.y.toInt();
+                              getTooltipItems:
+                                  (List<LineBarSpot> touchedBarSpots) {
+                                return touchedBarSpots
+                                    .map((barSpot) {
+                                      final spotIndex = barSpot.spotIndex;
+                                      if (spotIndex < 0 ||
+                                          spotIndex >= sortedKeys.length) {
+                                        return null;
+                                      }
 
-                                  return LineTooltipItem(
-                                    '${DateFormat.yMMMd().format(date)}\n${NumberFormat("#,##0", "en_US").format(price)} g',
-                                    const TextStyle(color: Colors.white, fontSize: 12),
-                                  );
-                                }).where((item) => item != null).toList().cast<LineTooltipItem>();
+                                      final date = DateFormat('yyyy-MM-dd HH')
+                                          .parse(sortedKeys[spotIndex]);
+                                      final price = barSpot.y.toInt();
+
+                                      return LineTooltipItem(
+                                        '${DateFormat.yMMMd().format(date)}\n${NumberFormat("#,##0", "en_US").format(price)} g',
+                                        const TextStyle(
+                                            color: Colors.white, fontSize: 12),
+                                      );
+                                    })
+                                    .where((item) => item != null)
+                                    .toList()
+                                    .cast<LineTooltipItem>();
                               },
                             ),
                           ),
@@ -446,12 +471,15 @@ class AuctionListPanel extends StatelessWidget {
           const Divider(color: Colors.grey),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('favorites').snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('favorites')
+                  .snapshots(),
               builder: (context, favSnapshot) {
                 if (favSnapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final favoriteIds = favSnapshot.data?.docs.map((doc) => doc.id).toSet() ?? {};
+                final favoriteIds =
+                    favSnapshot.data?.docs.map((doc) => doc.id).toSet() ?? {};
 
                 if (isLoading) {
                   return const Center(child: CircularProgressIndicator());
@@ -459,7 +487,8 @@ class AuctionListPanel extends StatelessWidget {
 
                 if (searchQuery.length < 3) {
                   return const Center(
-                    child: Text('Введите 3 или более символов для начала поиска.'),
+                    child:
+                        Text('Введите 3 или более символов для начала поиска.'),
                   );
                 }
 
@@ -471,10 +500,12 @@ class AuctionListPanel extends StatelessWidget {
                   itemCount: items.length,
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    final isFavorited = favoriteIds.contains(item.id.toString());
+                    final isFavorited =
+                        favoriteIds.contains(item.id.toString());
 
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0, vertical: 10.0),
                       child: Row(
                         key: ValueKey(item.id),
                         children: [
@@ -482,7 +513,8 @@ class AuctionListPanel extends StatelessWidget {
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFFD4BF7A), width: 1.5),
+                              border: Border.all(
+                                  color: const Color(0xFFD4BF7A), width: 1.5),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: item.iconUrl != null
@@ -491,32 +523,43 @@ class AuctionListPanel extends StatelessWidget {
                                     child: Image.network(
                                       item.iconUrl!,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (c, e, s) => const Icon(Icons.error, size: 20),
+                                      errorBuilder: (c, e, s) =>
+                                          const Icon(Icons.error, size: 20),
                                     ),
                                   )
                                 : const Icon(Icons.inventory_2, size: 20),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: Text(item.name, style: Theme.of(context).textTheme.bodyLarge),
+                            child: Text(item.name,
+                                style: Theme.of(context).textTheme.bodyLarge),
                           ),
                           GestureDetector(
-                            onTap: () => _toggleFavorite(context, item, isFavorited),
+                            onTap: () =>
+                                _toggleFavorite(context, item, isFavorited),
                             child: Container(
                               width: 40,
                               height: 40,
                               color: Colors.transparent,
                               alignment: Alignment.center,
                               child: Tooltip(
-                                message: isFavorited ? 'Удалить из избранного' : 'Добавить в избранное',
+                                message: isFavorited
+                                    ? 'Удалить из избранного'
+                                    : 'Добавить в избранное',
                                 child: AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 300),
-                                  transitionBuilder: (Widget child, Animation<double> animation) {
-                                    return FadeTransition(opacity: animation, child: child);
+                                  transitionBuilder: (Widget child,
+                                      Animation<double> animation) {
+                                    return FadeTransition(
+                                        opacity: animation, child: child);
                                   },
                                   child: Icon(
-                                    isFavorited ? Icons.star : Icons.star_border,
-                                    color: isFavorited ? const Color(0xFFFFC700) : const Color(0xFFD4BF7A),
+                                    isFavorited
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                    color: isFavorited
+                                        ? const Color(0xFFFFC700)
+                                        : const Color(0xFFD4BF7A),
                                     size: 24,
                                     key: ValueKey<bool>(isFavorited),
                                   ),
@@ -537,7 +580,8 @@ class AuctionListPanel extends StatelessWidget {
     );
   }
 
-  void _toggleFavorite(BuildContext context, AuctionItem item, bool isFavorited) {
+  void _toggleFavorite(
+      BuildContext context, AuctionItem item, bool isFavorited) {
     final collection = FirebaseFirestore.instance.collection('favorites');
     final docId = item.id.toString();
 
@@ -547,7 +591,8 @@ class AuctionListPanel extends StatelessWidget {
         builder: (BuildContext context) {
           return AlertDialog(
             title: const Text('Подтверждение'),
-            content: Text('Вы уверены, что хотите удалить "${item.name}" из избранного?'),
+            content: Text(
+                'Вы уверены, что хотите удалить "${item.name}" из избранного?'),
             actions: <Widget>[
               TextButton(
                 child: const Text('Отмена'),
@@ -575,7 +620,9 @@ class AuctionListPanel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       child: Row(
         children: [
-          Expanded(child: Text('Название предмета', style: theme.textTheme.titleMedium)),
+          Expanded(
+              child: Text('Название предмета',
+                  style: theme.textTheme.titleMedium)),
           const SizedBox(width: 40), // For the star icon
         ],
       ),

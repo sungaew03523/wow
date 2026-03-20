@@ -23,8 +23,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   final BlizzardApiService _apiService = BlizzardApiService();
   Timer? _timer;
 
-  final Stream<QuerySnapshot> _favoritesStream =
-      FirebaseFirestore.instance.collection('favorites').orderBy('name').snapshots();
+  final Stream<QuerySnapshot> _favoritesStream = FirebaseFirestore.instance
+      .collection('favorites')
+      .orderBy('name')
+      .snapshots();
 
   @override
   void initState() {
@@ -34,16 +36,16 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   void _scheduleNextUpdate() {
     if (!mounted) return;
-    
+
     final now = DateTime.now();
     var nextUpdate = DateTime(now.year, now.month, now.day, now.hour, 30);
-    
+
     if (now.isAfter(nextUpdate) || now.isAtSameMomentAs(nextUpdate)) {
       nextUpdate = nextUpdate.add(const Duration(hours: 1));
     }
-    
+
     final waitDuration = nextUpdate.difference(now);
-    
+
     _timer = Timer(waitDuration, () {
       if (mounted) {
         _updateFavoritePrices();
@@ -61,7 +63,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Future<void> _updateFavoritePrices() async {
     if (_isPriceUpdating) return;
     setState(() => _isPriceUpdating = true);
-    
+
     if (!mounted) return;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
@@ -73,8 +75,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       final favoritesSnapshot = await _firestore.collection('favorites').get();
       final Map<String, int> itemsToUpdate = {
         for (var doc in favoritesSnapshot.docs)
-          doc.id:
-              ((doc.data())['analysisVolume'] ?? 1000)
+          doc.id: ((doc.data())['analysisVolume'] ?? 1000)
       };
 
       if (itemsToUpdate.isEmpty) {
@@ -113,23 +114,26 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Future<void> _renameDuplicateFavorites() async {
     if (_isRenaming) return;
     setState(() => _isRenaming = true);
-    
+
     if (!mounted) return;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     scaffoldMessenger.showSnackBar(
-      const SnackBar(
-          content: Text('Проверка и переименование дубликатов...')),
+      const SnackBar(content: Text('Проверка и переименование дубликатов...')),
     );
 
     try {
       final favoritesSnapshot = await _firestore.collection('favorites').get();
-      final favorites =
-          favoritesSnapshot.docs.map((doc) => AuctionItem.fromFirestore(doc)).toList();
+      final favorites = favoritesSnapshot.docs
+          .map((doc) => AuctionItem.fromFirestore(doc))
+          .toList();
 
       final Map<String, List<AuctionItem>> itemsByName = {};
       for (var item in favorites) {
-        final baseName = item.name.split(' ').take(item.name.split(' ').length - 1).join(' ');
+        final baseName = item.name
+            .split(' ')
+            .take(item.name.split(' ').length - 1)
+            .join(' ');
         final nameToGroup =
             item.name.contains(RegExp(r' \d+$')) ? baseName : item.name;
 
@@ -293,9 +297,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 stream: _firestore.collection('investments').snapshots(),
                 builder: (context, investSnapshot) {
                   final allInvestments = investSnapshot.data?.docs ?? [];
-                  
+
                   // Группируем инвестиции по itemId для быстрого доступа
-                  final Map<String, List<DocumentSnapshot>> investmentsByItem = {};
+                  final Map<String, List<DocumentSnapshot>> investmentsByItem =
+                      {};
                   for (var doc in allInvestments) {
                     final data = doc.data() as Map<String, dynamic>;
                     final itemId = data['itemId'] as String?;
@@ -323,9 +328,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         itemBuilder: (context, index) {
                           final item =
                               AuctionItem.fromFirestore(favoriteDocs[index]);
-                          final itemInvestments = investmentsByItem[item.id.toString()] ?? [];
+                          final itemInvestments =
+                              investmentsByItem[item.id.toString()] ?? [];
                           return FavoriteItemRow(
-                            item: item, 
+                            item: item,
                             itemInvestments: itemInvestments,
                             key: ValueKey(item.id),
                           );
@@ -371,7 +377,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           style: buttonStyle,
           onPressed: _isClearingHistory ? null : _clearAllHistory,
           icon: _isClearingHistory
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 3))
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 3))
               : const Icon(Icons.delete_sweep, size: 20),
           label: const Text('Очистить историю'),
         ),
@@ -397,19 +406,22 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         children: [
           const SizedBox(width: 52), // Icon + padding
           Expanded(
-              flex: 2, child: Text('Название', style: theme.textTheme.titleMedium)),
+              flex: 2,
+              child: Text('Название', style: theme.textTheme.titleMedium)),
           SizedBox(
               width: 100,
               child: Text('Объем',
-                  style: theme.textTheme.titleMedium, textAlign: TextAlign.center)),
+                  style: theme.textTheme.titleMedium,
+                  textAlign: TextAlign.center)),
           Expanded(
               flex: 3,
               child: Center(
                   child: Text('График', style: theme.textTheme.titleMedium))),
           SizedBox(
             width: 150,
-            child: Text('Инвестиции', 
-                style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
+            child: Text('Инвестиции',
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center),
           ),
           SizedBox(
               width: 90,
@@ -422,13 +434,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 }
 
-
 class FavoriteItemRow extends StatefulWidget {
   final AuctionItem item;
   final List<DocumentSnapshot> itemInvestments;
 
   const FavoriteItemRow({
-    required this.item, 
+    required this.item,
     required this.itemInvestments,
     super.key,
   });
@@ -472,7 +483,8 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
             const SizedBox(width: 16),
             Expanded(
                 flex: 2,
-                child: Text(widget.item.name, style: Theme.of(context).textTheme.bodyLarge)),
+                child: Text(widget.item.name,
+                    style: Theme.of(context).textTheme.bodyLarge)),
             SizedBox(
               width: 100,
               child: Row(
@@ -481,7 +493,9 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                   Text(
                     (() {
                       final history = widget.item.totalQuantityHistory;
-                      final totalQty = (history != null && history.isNotEmpty) ? history.values.last : 0;
+                      final totalQty = (history != null && history.isNotEmpty)
+                          ? history.values.last
+                          : 0;
                       if (totalQty == 0) return '-';
                       int vol = (totalQty * 0.10).ceil();
                       if (vol < 1) vol = 1;
@@ -493,7 +507,8 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                 ],
               ),
             ),
-            Expanded(flex: 3, child: _buildPriceHistoryChart(context, widget.item)),
+            Expanded(
+                flex: 3, child: _buildPriceHistoryChart(context, widget.item)),
             SizedBox(
               width: 150,
               child: Row(
@@ -502,7 +517,8 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                   IconButton(
                     icon: const Icon(Icons.add_shopping_cart),
                     tooltip: 'Добавить/Изменить покупку',
-                    onPressed: () => _showAddInvestmentDialog(context, widget.item),
+                    onPressed: () =>
+                        _showAddInvestmentDialog(context, widget.item),
                   ),
                   _buildProfitDisplay(widget.item, widget.itemInvestments),
                 ],
@@ -519,7 +535,8 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                       padding: const EdgeInsets.all(8),
                       constraints: const BoxConstraints(),
                       icon: const Icon(Icons.history_toggle_off_outlined),
-                      onPressed: () => _clearSingleItemHistory(context, widget.item),
+                      onPressed: () =>
+                          _clearSingleItemHistory(context, widget.item),
                       color: Colors.grey[400],
                       iconSize: 20,
                       splashRadius: 18,
@@ -547,7 +564,8 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
     );
   }
 
-  Future<void> _showAddInvestmentDialog(BuildContext context, AuctionItem item) async {
+  Future<void> _showAddInvestmentDialog(
+      BuildContext context, AuctionItem item) async {
     final investmentQuery = _firestore
         .collection('investments')
         .where('itemId', isEqualTo: item.id.toString());
@@ -568,8 +586,10 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
 
     final averagePrice = totalQuantity > 0 ? totalCost / totalQuantity : 0.0;
 
-    final quantityController = TextEditingController(text: totalQuantity > 0 ? totalQuantity.toString() : '');
-    final priceController = TextEditingController(text: averagePrice > 0 ? averagePrice.toStringAsFixed(2) : '');
+    final quantityController = TextEditingController(
+        text: totalQuantity > 0 ? totalQuantity.toString() : '');
+    final priceController = TextEditingController(
+        text: averagePrice > 0 ? averagePrice.toStringAsFixed(2) : '');
     final formKey = GlobalKey<FormState>();
 
     if (!context.mounted) return;
@@ -587,9 +607,13 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                 TextFormField(
                   controller: quantityController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Общее количество'),
+                  decoration:
+                      const InputDecoration(labelText: 'Общее количество'),
                   validator: (value) {
-                    if (value == null || value.isEmpty || int.tryParse(value) == null || int.parse(value) < 0) {
+                    if (value == null ||
+                        value.isEmpty ||
+                        int.tryParse(value) == null ||
+                        int.parse(value) < 0) {
                       return 'Введите корректное число';
                     }
                     return null;
@@ -597,10 +621,15 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                 ),
                 TextFormField(
                   controller: priceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Средняя цена закупки (за шт.)'),
-                   validator: (value) {
-                    if (value == null || value.isEmpty || double.tryParse(value) == null || double.parse(value) < 0) {
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                      labelText: 'Средняя цена закупки (за шт.)'),
+                  validator: (value) {
+                    if (value == null ||
+                        value.isEmpty ||
+                        double.tryParse(value) == null ||
+                        double.parse(value) < 0) {
                       return 'Введите корректную цену';
                     }
                     return null;
@@ -636,12 +665,14 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                   }
 
                   await batch.commit();
-                  
-                  if(context.mounted) {
+
+                  if (context.mounted) {
                     Navigator.of(context).pop();
-                     ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                          content: Text(quantity > 0 ? 'Инвестиция успешно сохранена!' : 'Инвестиция удалена.'),
+                          content: Text(quantity > 0
+                              ? 'Инвестиция успешно сохранена!'
+                              : 'Инвестиция удалена.'),
                           backgroundColor: Colors.green),
                     );
                   }
@@ -655,7 +686,8 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
     );
   }
 
-  Widget _buildProfitDisplay(AuctionItem item, List<DocumentSnapshot> snapshots) {
+  Widget _buildProfitDisplay(
+      AuctionItem item, List<DocumentSnapshot> snapshots) {
     if (snapshots.isEmpty) {
       return Text('0 g', style: Theme.of(context).textTheme.bodyLarge);
     }
@@ -670,45 +702,54 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
       final qty = (data['quantity'] as int?) ?? 0;
       totalCost += price * qty;
     }
-    
+
     final currentWeightedPrice = item.weightedAveragePrice;
     if (currentWeightedPrice == null || totalQuantity == 0) {
       return Text('0 g', style: Theme.of(context).textTheme.bodyLarge);
     }
 
-    final currentValue = (currentWeightedPrice * totalQuantity) * 0.95; // -5% commission
+    final currentValue =
+        (currentWeightedPrice * totalQuantity) * 0.95; // -5% commission
     final profit = currentValue - totalCost;
-    
+
     final profitColor = profit >= 0 ? Colors.greenAccent : Colors.redAccent;
     final profitSign = profit > 0 ? '+' : '';
 
     return Tooltip(
-      message: 'Всего куплено: $totalQuantity шт.\nСредняя цена покупки: ${(totalCost / totalQuantity).toStringAsFixed(2)} g',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-           Text(
-            '${totalCost.toStringAsFixed(0)} g',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.amber, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '$profitSign${profit.toStringAsFixed(0)} g',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: profitColor, fontWeight: FontWeight.bold),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      )
-    );
+        message:
+            'Всего куплено: $totalQuantity шт.\nСредняя цена покупки: ${(totalCost / totalQuantity).toStringAsFixed(2)} g',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '${totalCost.toStringAsFixed(0)} g',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Colors.amber, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$profitSign${profit.toStringAsFixed(0)} g',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.copyWith(color: profitColor, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ));
   }
 
-Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
+  Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
     final priceHistory = item.averagePriceHistory;
     final quantityHistory = item.totalQuantityHistory;
 
     if (priceHistory == null || priceHistory.length < 2) {
-        return Center(child: Text('Недостаточно данных', style: TextStyle(color: Colors.grey[600])));
+      return Center(
+          child: Text('Недостаточно данных',
+              style: TextStyle(color: Colors.grey[600])));
     }
 
     final sortedKeys = priceHistory.keys.toList()..sort();
@@ -719,48 +760,52 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
     double minQuantity = double.maxFinite, maxQuantity = double.minPositive;
 
     for (var i = 0; i < sortedKeys.length; i++) {
-        final key = sortedKeys[i];
-        final priceValue = priceHistory[key];
-        final quantityValue = quantityHistory?[key];
+      final key = sortedKeys[i];
+      final priceValue = priceHistory[key];
+      final quantityValue = quantityHistory?[key];
 
-        if (priceValue != null) {
-            final doublePrice = priceValue.toDouble();
-            priceSpots.add(FlSpot(i.toDouble(), doublePrice));
-            minPrice = min(minPrice, doublePrice);
-            maxPrice = max(maxPrice, doublePrice);
-        }
+      if (priceValue != null) {
+        final doublePrice = priceValue.toDouble();
+        priceSpots.add(FlSpot(i.toDouble(), doublePrice));
+        minPrice = min(minPrice, doublePrice);
+        maxPrice = max(maxPrice, doublePrice);
+      }
 
-        if (quantityValue != null) {
-            final doubleQuantity = quantityValue.toDouble();
-            quantitySpotsRaw.add(FlSpot(i.toDouble(), doubleQuantity));
-            minQuantity = min(minQuantity, doubleQuantity);
-            maxQuantity = max(maxQuantity, doubleQuantity);
-        }
+      if (quantityValue != null) {
+        final doubleQuantity = quantityValue.toDouble();
+        quantitySpotsRaw.add(FlSpot(i.toDouble(), doubleQuantity));
+        minQuantity = min(minQuantity, doubleQuantity);
+        maxQuantity = max(maxQuantity, doubleQuantity);
+      }
     }
-    
+
     final bool showQuantityLine = quantitySpotsRaw.length > 1;
     final bool isPriceFlat = (maxPrice - minPrice).abs() < 0.01;
     final bool isQuantityFlat = (maxQuantity - minQuantity).abs() < 0.01;
 
     final priceRange = !isPriceFlat ? (maxPrice - minPrice) : 1.0;
-    double paddedMinPrice = isPriceFlat ? minPrice - priceRange * 0.5 : minPrice - priceRange * 0.2;
+    double paddedMinPrice =
+        isPriceFlat ? minPrice - priceRange * 0.5 : minPrice - priceRange * 0.2;
     if (paddedMinPrice < 0) paddedMinPrice = 0;
-    final paddedMaxPrice = isPriceFlat ? maxPrice + priceRange * 0.5 : maxPrice + priceRange * 0.2;
+    final paddedMaxPrice =
+        isPriceFlat ? maxPrice + priceRange * 0.5 : maxPrice + priceRange * 0.2;
     final paddedPriceRange = paddedMaxPrice - paddedMinPrice;
 
     final quantityRange = !isQuantityFlat ? (maxQuantity - minQuantity) : 1.0;
 
     List<FlSpot> quantitySpotsNormalized = [];
     if (showQuantityLine) {
-        if (!isQuantityFlat) {
-            quantitySpotsNormalized = quantitySpotsRaw.map((spot) {
-                final normalizedY = paddedMinPrice + (spot.y - minQuantity) * paddedPriceRange / quantityRange;
-                return FlSpot(spot.x, normalizedY);
-            }).toList();
-        } else {
-            final avgPrice = (paddedMinPrice + paddedMaxPrice) / 2;
-            quantitySpotsNormalized = quantitySpotsRaw.map((spot) => FlSpot(spot.x, avgPrice)).toList();
-        }
+      if (!isQuantityFlat) {
+        quantitySpotsNormalized = quantitySpotsRaw.map((spot) {
+          final normalizedY = paddedMinPrice +
+              (spot.y - minQuantity) * paddedPriceRange / quantityRange;
+          return FlSpot(spot.x, normalizedY);
+        }).toList();
+      } else {
+        final avgPrice = (paddedMinPrice + paddedMaxPrice) / 2;
+        quantitySpotsNormalized =
+            quantitySpotsRaw.map((spot) => FlSpot(spot.x, avgPrice)).toList();
+      }
     }
 
     Widget getSideTitleWidget(double value, TitleMeta meta, bool isLeft) {
@@ -777,143 +822,175 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
       if (isLeft) {
         titleText = value.toStringAsFixed(0);
       } else {
-        final denormalized = minQuantity + (value - paddedMinPrice) * quantityRange / paddedPriceRange;
+        final denormalized = minQuantity +
+            (value - paddedMinPrice) * quantityRange / paddedPriceRange;
         titleText = NumberFormat.compact().format(max(0, denormalized));
       }
-      
-      return Text(titleText, style: style, textAlign: isLeft ? TextAlign.left : TextAlign.right);
+
+      return Text(titleText,
+          style: style, textAlign: isLeft ? TextAlign.left : TextAlign.right);
     }
 
     return SizedBox(
-        height: 90,
-        child: Stack(
-          children: [
-            LineChart(
+      height: 90,
+      child: Stack(
+        children: [
+          LineChart(
             LineChartData(
-                gridData: const FlGridData(show: false),
-                borderData: FlBorderData(show: false),
-                minY: paddedMinPrice,
-                maxY: paddedMaxPrice,
-                lineTouchData: LineTouchData(
-                  touchTooltipData: LineTouchTooltipData(
-                      getTooltipColor: (touchedSpot) => Colors.black.withAlpha(204),
-                      fitInsideHorizontally: true, fitInsideVertically: true,
-                      getTooltipItems: (touchedSpots) {
-                          if (touchedSpots.isEmpty) return [];
-                          return touchedSpots.map((spot) {
-                              if (spot != touchedSpots.first) return null;
+              gridData: const FlGridData(show: false),
+              borderData: FlBorderData(show: false),
+              minY: paddedMinPrice,
+              maxY: paddedMaxPrice,
+              lineTouchData: LineTouchData(
+                touchTooltipData: LineTouchTooltipData(
+                  getTooltipColor: (touchedSpot) => Colors.black.withAlpha(204),
+                  fitInsideHorizontally: true,
+                  fitInsideVertically: true,
+                  getTooltipItems: (touchedSpots) {
+                    if (touchedSpots.isEmpty) return [];
+                    return touchedSpots.map((spot) {
+                      if (spot != touchedSpots.first) return null;
 
-                              final spotIndex = spot.spotIndex;
-                              if (spotIndex >= sortedKeys.length) return null;
-                              
-                              final keyString = sortedKeys[spotIndex];
-                              DateTime? parsedDate = DateTime.tryParse(keyString);
-                              
-                              if (parsedDate == null && keyString.length == 13 && keyString.contains(' ')) {
-                                  final fixedString = '${keyString.replaceFirst(' ', 'T')}:00:00';
-                                  parsedDate = DateTime.tryParse(fixedString);
-                              }
-                              
-                              final finalDate = parsedDate ?? DateTime.now();
-                              final date = DateFormat('dd.MM HH:mm').format(finalDate);
+                      final spotIndex = spot.spotIndex;
+                      if (spotIndex >= sortedKeys.length) return null;
 
-                              final children = <TextSpan>[];
-                              if (showQuantityLine && spotIndex < quantitySpotsRaw.length) {
-                                  children.add(TextSpan(
-                                      text: '${NumberFormat.compact().format(quantitySpotsRaw[spotIndex].y)}\n',
-                                      style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12),
-                                  ));
-                              }
-                              if (spotIndex < priceSpots.length) {
-                                  children.add(TextSpan(
-                                      text: priceSpots[spotIndex].y.toStringAsFixed(2),
-                                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
-                                  ));
-                              }
+                      final keyString = sortedKeys[spotIndex];
+                      DateTime? parsedDate = DateTime.tryParse(keyString);
 
-                              return LineTooltipItem(
-                                  '$date\n',
-                                  const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                  children: children,
-                              );
-                          }).toList();
-                      },
+                      if (parsedDate == null &&
+                          keyString.length == 13 &&
+                          keyString.contains(' ')) {
+                        final fixedString =
+                            '${keyString.replaceFirst(' ', 'T')}:00:00';
+                        parsedDate = DateTime.tryParse(fixedString);
+                      }
+
+                      final finalDate = parsedDate ?? DateTime.now();
+                      final date = DateFormat('dd.MM HH:mm').format(finalDate);
+
+                      final children = <TextSpan>[];
+                      if (showQuantityLine &&
+                          spotIndex < quantitySpotsRaw.length) {
+                        children.add(TextSpan(
+                          text:
+                              '${NumberFormat.compact().format(quantitySpotsRaw[spotIndex].y)}\n',
+                          style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12),
+                        ));
+                      }
+                      if (spotIndex < priceSpots.length) {
+                        children.add(TextSpan(
+                          text: priceSpots[spotIndex].y.toStringAsFixed(2),
+                          style: const TextStyle(
+                              color: Colors.greenAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12),
+                        ));
+                      }
+
+                      return LineTooltipItem(
+                        '$date\n',
+                        const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold),
+                        children: children,
+                      );
+                    }).toList();
+                  },
+                ),
+              ),
+              titlesData: FlTitlesData(
+                show: true,
+                bottomTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 60,
+                    interval: paddedPriceRange / 2 * 1.05,
+                    getTitlesWidget: (v, m) => getSideTitleWidget(v, m, true),
                   ),
                 ),
-                titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 60,
-                            interval: paddedPriceRange / 2 * 1.05,
-                            getTitlesWidget: (v, m) => getSideTitleWidget(v, m, true),
-                        ),
-                    ),
-                    rightTitles: AxisTitles(
-                        sideTitles: showQuantityLine ? SideTitles(
-                            showTitles: true,
-                            reservedSize: 45,
-                            interval: paddedPriceRange / 2 * 1.05,
-                            getTitlesWidget: (v, m) => getSideTitleWidget(v, m, false),
-                        ) : const SideTitles(showTitles: false),
-                    ),
+                rightTitles: AxisTitles(
+                  sideTitles: showQuantityLine
+                      ? SideTitles(
+                          showTitles: true,
+                          reservedSize: 45,
+                          interval: paddedPriceRange / 2 * 1.05,
+                          getTitlesWidget: (v, m) =>
+                              getSideTitleWidget(v, m, false),
+                        )
+                      : const SideTitles(showTitles: false),
                 ),
-                lineBarsData: [
-                    LineChartBarData(
-                        spots: priceSpots,
-                        isCurved: true,
-                        color: Colors.greenAccent,
-                        barWidth: 2,
-                        isStrokeCapRound: true,
-                        dotData: const FlDotData(show: false),
-                        belowBarData: BarAreaData(show: true, color: Colors.greenAccent.withAlpha(40)),
-                    ),
-                    if (showQuantityLine)
-                        LineChartBarData(
-                            spots: quantitySpotsNormalized,
-                            isCurved: true,
-                            color: Colors.redAccent,
-                            barWidth: 2,
-                            isStrokeCapRound: true,
-                            dotData: const FlDotData(show: false),
-                            belowBarData: BarAreaData(show: false),
-                        ),
-                ],
+              ),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: priceSpots,
+                  isCurved: true,
+                  color: Colors.greenAccent,
+                  barWidth: 2,
+                  isStrokeCapRound: true,
+                  dotData: const FlDotData(show: false),
+                  belowBarData: BarAreaData(
+                      show: true, color: Colors.greenAccent.withAlpha(40)),
+                ),
+                if (showQuantityLine)
+                  LineChartBarData(
+                    spots: quantitySpotsNormalized,
+                    isCurved: true,
+                    color: Colors.redAccent,
+                    barWidth: 2,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(show: false),
+                  ),
+              ],
             ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: 60,
+              child: Text(
+                item.weightedAveragePrice != null
+                    ? item.weightedAveragePrice!.toStringAsFixed(2)
+                    : '-',
+                style: const TextStyle(
+                    color: Colors.greenAccent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold),
+                textAlign: TextAlign.left,
+              ),
             ),
+          ),
+          if (showQuantityLine)
             Align(
-              alignment: Alignment.centerLeft,
+              alignment: Alignment.centerRight,
               child: SizedBox(
-                width: 60,
+                width: 45,
                 child: Text(
-                  item.weightedAveragePrice != null ? item.weightedAveragePrice!.toStringAsFixed(2) : '-',
-                  style: const TextStyle(color: Colors.greenAccent, fontSize: 13, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.left,
+                  NumberFormat.compact()
+                      .format(item.totalQuantityHistory?.values.last ?? 0),
+                  style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.right,
                 ),
               ),
             ),
-            if (showQuantityLine)
-              Align(
-                alignment: Alignment.centerRight,
-                child: SizedBox(
-                  width: 45,
-                  child: Text(
-                    NumberFormat.compact().format(item.totalQuantityHistory?.values.last ?? 0),
-                    style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-              ),
-          ],
-        ),
+        ],
+      ),
     );
-}
+  }
 
-
-  Future<void> _clearSingleItemHistory(BuildContext context, AuctionItem item) async {
+  Future<void> _clearSingleItemHistory(
+      BuildContext context, AuctionItem item) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     final bool? confirmed = await showDialog<bool>(
@@ -921,7 +998,8 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Подтверждение'),
-          content: Text('Вы уверены, что хотите удалить историю цен и количества для "${item.name}"?'),
+          content: Text(
+              'Вы уверены, что хотите удалить историю цен и количества для "${item.name}"?'),
           actions: <Widget>[
             TextButton(
               child: const Text('Отмена'),
@@ -942,13 +1020,10 @@ Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {
     }
 
     try {
-      await _firestore
-          .collection('favorites')
-          .doc(item.id.toString())
-          .update({
-            'averagePriceHistory': {},
-            'totalQuantityHistory': {},
-          });
+      await _firestore.collection('favorites').doc(item.id.toString()).update({
+        'averagePriceHistory': {},
+        'totalQuantityHistory': {},
+      });
 
       if (!mounted) return;
       scaffoldMessenger.showSnackBar(

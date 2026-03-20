@@ -51,7 +51,8 @@ class AuctionItem {
       'analysisVolume': analysisVolume,
       if (minimalCost != null) 'minimalCost': minimalCost,
       if (marketPrice != null) 'marketPrice': marketPrice,
-      if (weightedAveragePrice != null) 'weightedAveragePrice': weightedAveragePrice,
+      if (weightedAveragePrice != null)
+        'weightedAveragePrice': weightedAveragePrice,
       if (averagePriceHistory != null)
         'averagePriceHistory': averagePriceHistory,
       if (totalQuantityHistory != null)

@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../blizzard_api_service.dart';
 import '../models/wow_recipe.dart';
 
-
 class CraftsScreen extends StatefulWidget {
   const CraftsScreen({super.key});
 
@@ -110,7 +109,8 @@ class _CraftsAppBarState extends State<CraftsAppBar> {
                 SizedBox(height: 10),
                 Text(
                   'Дождитесь завершения, это может занять минуту.',
-                  style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+                  style: TextStyle(
+                      fontStyle: FontStyle.italic, color: Colors.grey),
                 ),
               ],
             ),
@@ -251,12 +251,15 @@ class CraftsListPanel extends StatelessWidget {
           const Divider(color: Colors.grey),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('favorite_crafts').snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('favorite_crafts')
+                  .snapshots(),
               builder: (context, favSnapshot) {
                 if (favSnapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final favoriteIds = favSnapshot.data?.docs.map((doc) => doc.id).toSet() ?? {};
+                final favoriteIds =
+                    favSnapshot.data?.docs.map((doc) => doc.id).toSet() ?? {};
 
                 if (isLoading) {
                   return const Center(child: CircularProgressIndicator());
@@ -264,7 +267,8 @@ class CraftsListPanel extends StatelessWidget {
 
                 if (searchQuery.length < 3) {
                   return const Center(
-                    child: Text('Введите 3 или более символов для поиска крафтов.'),
+                    child: Text(
+                        'Введите 3 или более символов для поиска крафтов.'),
                   );
                 }
 
@@ -276,10 +280,12 @@ class CraftsListPanel extends StatelessWidget {
                   itemCount: recipes.length,
                   itemBuilder: (context, index) {
                     final recipe = recipes[index];
-                    final isFavorited = favoriteIds.contains(recipe.id.toString());
+                    final isFavorited =
+                        favoriteIds.contains(recipe.id.toString());
 
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0, vertical: 10.0),
                       child: Row(
                         key: ValueKey(recipe.id),
                         children: [
@@ -287,7 +293,8 @@ class CraftsListPanel extends StatelessWidget {
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFFD4BF7A), width: 1.5),
+                              border: Border.all(
+                                  color: const Color(0xFFD4BF7A), width: 1.5),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: recipe.iconUrl != null
@@ -296,7 +303,8 @@ class CraftsListPanel extends StatelessWidget {
                                     child: Image.network(
                                       recipe.iconUrl!,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (c, e, s) => const Icon(Icons.error, size: 20),
+                                      errorBuilder: (c, e, s) =>
+                                          const Icon(Icons.error, size: 20),
                                     ),
                                   )
                                 : const Icon(Icons.handyman, size: 20),
@@ -306,11 +314,14 @@ class CraftsListPanel extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(recipe.name, style: Theme.of(context).textTheme.bodyLarge),
+                                Text(recipe.name,
+                                    style:
+                                        Theme.of(context).textTheme.bodyLarge),
                                 if (recipe.professionName != null)
                                   Text(
                                     recipe.professionName!,
-                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                    style: const TextStyle(
+                                        fontSize: 12, color: Colors.grey),
                                   ),
                               ],
                             ),
@@ -321,29 +332,38 @@ class CraftsListPanel extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: recipe.reagents.map((reagent) {
                                 return Text(
-                                  '${reagent.name} x${reagent.quantity}', 
+                                  '${reagent.name} x${reagent.quantity}',
                                   style: const TextStyle(fontSize: 12),
                                 );
                               }).toList(),
                             ),
                           ),
                           GestureDetector(
-                            onTap: () => _toggleFavorite(context, recipe, isFavorited),
+                            onTap: () =>
+                                _toggleFavorite(context, recipe, isFavorited),
                             child: Container(
                               width: 40,
                               height: 40,
                               color: Colors.transparent,
                               alignment: Alignment.center,
                               child: Tooltip(
-                                message: isFavorited ? 'Удалить из избранных крафтов' : 'Добавить в избранные крафты',
+                                message: isFavorited
+                                    ? 'Удалить из избранных крафтов'
+                                    : 'Добавить в избранные крафты',
                                 child: AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 300),
-                                  transitionBuilder: (Widget child, Animation<double> animation) {
-                                    return FadeTransition(opacity: animation, child: child);
+                                  transitionBuilder: (Widget child,
+                                      Animation<double> animation) {
+                                    return FadeTransition(
+                                        opacity: animation, child: child);
                                   },
                                   child: Icon(
-                                    isFavorited ? Icons.star : Icons.star_border,
-                                    color: isFavorited ? const Color(0xFFFFC700) : const Color(0xFFD4BF7A),
+                                    isFavorited
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                    color: isFavorited
+                                        ? const Color(0xFFFFC700)
+                                        : const Color(0xFFD4BF7A),
                                     size: 24,
                                     key: ValueKey<bool>(isFavorited),
                                   ),
@@ -364,7 +384,8 @@ class CraftsListPanel extends StatelessWidget {
     );
   }
 
-  void _toggleFavorite(BuildContext context, WowRecipe recipe, bool isFavorited) {
+  void _toggleFavorite(
+      BuildContext context, WowRecipe recipe, bool isFavorited) {
     final collection = FirebaseFirestore.instance.collection('favorite_crafts');
     final docId = recipe.id.toString();
 
@@ -374,7 +395,8 @@ class CraftsListPanel extends StatelessWidget {
         builder: (BuildContext context) {
           return AlertDialog(
             title: const Text('Подтверждение'),
-            content: Text('Вы уверены, что хотите удалить рецепт "${recipe.name}" из избранного?'),
+            content: Text(
+                'Вы уверены, что хотите удалить рецепт "${recipe.name}" из избранного?'),
             actions: <Widget>[
               TextButton(
                 child: const Text('Отмена'),
@@ -403,9 +425,13 @@ class CraftsListPanel extends StatelessWidget {
       child: Row(
         children: [
           const SizedBox(width: 52),
-          Expanded(child: Text('Название рецепта', style: theme.textTheme.titleMedium)),
-          Expanded(flex: 1, child: Text('Реагенты', style: theme.textTheme.titleMedium)),
-          const SizedBox(width: 40), 
+          Expanded(
+              child:
+                  Text('Название рецепта', style: theme.textTheme.titleMedium)),
+          Expanded(
+              flex: 1,
+              child: Text('Реагенты', style: theme.textTheme.titleMedium)),
+          const SizedBox(width: 40),
         ],
       ),
     );

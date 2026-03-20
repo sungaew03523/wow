@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RecipeReagent {
   final int itemId;
-  final String name; 
+  final String name;
   final int quantity;
 
   RecipeReagent({
@@ -79,9 +79,7 @@ class WowRecipe {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is WowRecipe &&
-          runtimeType == other.runtimeType &&
-          id == other.id;
+      other is WowRecipe && runtimeType == other.runtimeType && id == other.id;
 
   @override
   int get hashCode => id.hashCode;

@@ -209,13 +209,12 @@ class _FarmsScreenState extends State<FarmsScreen> {
                                       );
                                       formulaController.value =
                                           TextEditingValue(
-                                            text: newText,
-                                            selection: TextSelection.collapsed(
-                                              offset:
-                                                  currentSelection.start +
-                                                  itemNameToAdd.length,
-                                            ),
-                                          );
+                                        text: newText,
+                                        selection: TextSelection.collapsed(
+                                          offset: currentSelection.start +
+                                              itemNameToAdd.length,
+                                        ),
+                                      );
                                     }
                                   },
                                 ),
@@ -451,7 +450,6 @@ class _FarmsScreenState extends State<FarmsScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final buttonStyle = ElevatedButton.styleFrom(
@@ -507,7 +505,8 @@ class _FarmsScreenState extends State<FarmsScreen> {
 
           final favoritesMap = {
             for (var doc in favoritesSnapshot.data!.docs)
-              (doc.data() as Map<String, dynamic>)['name'] as String: AuctionItem.fromFirestore(doc)
+              (doc.data() as Map<String, dynamic>)['name'] as String:
+                  AuctionItem.fromFirestore(doc)
           };
 
           return StreamBuilder<QuerySnapshot>(
@@ -541,106 +540,110 @@ class _FarmsScreenState extends State<FarmsScreen> {
                 itemBuilder: (context, index) {
                   final farm = Farm.fromFirestore(farmDocs[index]);
                   return Card(
-                margin: const EdgeInsets.symmetric(
-                  vertical: 8.0,
-                  horizontal: 4.0,
-                ),
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  side: BorderSide(
-                    color: Theme.of(context).colorScheme.outline.withAlpha(128),
-                    width: 1,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    margin: const EdgeInsets.symmetric(
+                      vertical: 8.0,
+                      horizontal: 4.0,
+                    ),
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      side: BorderSide(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outline
+                            .withAlpha(128),
+                        width: 1,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              farm.name,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  farm.name,
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.copy_outlined,
+                                  color: Colors.green,
+                                ),
+                                tooltip: 'Дублировать',
+                                onPressed: () => _duplicateFarm(farm),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit_outlined,
+                                  color: Colors.blue,
+                                ),
+                                tooltip: 'Редактировать',
+                                onPressed: () => _showFarmDialog(farm: farm),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.redAccent,
+                                ),
+                                tooltip: 'Удалить',
+                                onPressed: () => _deleteFarm(farm.id),
+                              ),
+                            ],
                           ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.copy_outlined,
-                              color: Colors.green,
-                            ),
-                            tooltip: 'Дублировать',
-                            onPressed: () => _duplicateFarm(farm),
+                          const SizedBox(height: 4),
+                          Text(
+                            farm.profession,
+                            style: const TextStyle(color: Colors.grey),
                           ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.edit_outlined,
-                              color: Colors.blue,
-                            ),
-                            tooltip: 'Редактировать',
-                            onPressed: () => _showFarmDialog(farm: farm),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Формула: ${farm.formula}',
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              color: Colors.redAccent,
-                            ),
-                            tooltip: 'Удалить',
-                            onPressed: () => _deleteFarm(farm.id),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Количество крафтов: ${farm.craftsCount}',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const Divider(),
+                          FarmComponentsList(
+                            formula: farm.formula,
+                            favorites: favoritesMap,
+                            overrides: _priceOverrides[farm.id] ?? {},
+                            onOverrideChanged: (itemName, newPrice) {
+                              setState(() {
+                                if (newPrice == null) {
+                                  _priceOverrides[farm.id]?.remove(itemName);
+                                } else {
+                                  _priceOverrides[farm.id] ??= {};
+                                  _priceOverrides[farm.id]![itemName] =
+                                      newPrice;
+                                }
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          FarmProfitCalculator(
+                            formula: farm.formula,
+                            favorites: favoritesMap,
+                            craftsCount: farm.craftsCount,
+                            overrides: _priceOverrides[farm.id] ?? {},
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        farm.profession,
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Формула: ${farm.formula}',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Количество крафтов: ${farm.craftsCount}',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const Divider(),
-                      FarmComponentsList(
-                        formula: farm.formula,
-                        favorites: favoritesMap,
-                        overrides: _priceOverrides[farm.id] ?? {},
-                        onOverrideChanged: (itemName, newPrice) {
-                          setState(() {
-                            if (newPrice == null) {
-                              _priceOverrides[farm.id]?.remove(itemName);
-                            } else {
-                              _priceOverrides[farm.id] ??= {};
-                              _priceOverrides[farm.id]![itemName] = newPrice;
-                            }
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      FarmProfitCalculator(
-                        formula: farm.formula,
-                        favorites: favoritesMap,
-                        craftsCount: farm.craftsCount,
-                        overrides: _priceOverrides[farm.id] ?? {},
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               );
             },
           );
         },
-      );
-    },
-  ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showFarmDialog(),
         tooltip: 'Добавить фарм',
@@ -670,7 +673,7 @@ class FarmProfitCalculator extends StatelessWidget {
     if (formula.isEmpty) return const SizedBox.shrink();
 
     final itemNames = _extractItemNames(formula);
-    
+
     // Подготовка цен из переданной мапы favorites
     final Map<String, double> effectivePrices = {};
     for (String name in itemNames) {
@@ -683,8 +686,8 @@ class FarmProfitCalculator extends StatelessWidget {
 
     String formulaWithPrices = formula;
     for (String name in itemNames) {
-      formulaWithPrices =
-          formulaWithPrices.replaceAll('"$name"', effectivePrices[name]?.toString() ?? '0');
+      formulaWithPrices = formulaWithPrices.replaceAll(
+          '"$name"', effectivePrices[name]?.toString() ?? '0');
     }
 
     double profit = 0;
@@ -770,9 +773,8 @@ class FarmComponentsList extends StatelessWidget {
           children: components.map((component) {
             final String name = component['name'];
             final bool isOverridden = overrides.containsKey(name);
-            final double pricePerPiece = isOverridden 
-                ? overrides[name]! 
-                : component['price'];
+            final double pricePerPiece =
+                isOverridden ? overrides[name]! : component['price'];
 
             return InkWell(
               onTap: () async {
@@ -789,7 +791,8 @@ class FarmComponentsList extends StatelessWidget {
                         labelText: 'Цена за 1 шт.',
                         suffixText: 'з',
                       ),
-                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          TextInputType.numberWithOptions(decimal: true),
                       autofocus: true,
                     ),
                     actions: [
@@ -799,12 +802,15 @@ class FarmComponentsList extends StatelessWidget {
                       ),
                       if (isOverridden)
                         TextButton(
-                          onPressed: () => Navigator.pop(context, -1.0), // Сигнал сброса
-                          child: const Text('Сброс', style: TextStyle(color: Colors.orange)),
+                          onPressed: () =>
+                              Navigator.pop(context, -1.0), // Сигнал сброса
+                          child: const Text('Сброс',
+                              style: TextStyle(color: Colors.orange)),
                         ),
                       ElevatedButton(
                         onPressed: () {
-                          final val = double.tryParse(controller.text.replaceAll(',', '.'));
+                          final val = double.tryParse(
+                              controller.text.replaceAll(',', '.'));
                           Navigator.pop(context, val);
                         },
                         child: const Text('Применить'),
@@ -823,8 +829,11 @@ class FarmComponentsList extends StatelessWidget {
               },
               borderRadius: BorderRadius.circular(16),
               child: Chip(
-                backgroundColor: isOverridden ? Colors.blue.withAlpha(40) : null,
-                side: isOverridden ? const BorderSide(color: Colors.blue, width: 1) : null,
+                backgroundColor:
+                    isOverridden ? Colors.blue.withAlpha(40) : null,
+                side: isOverridden
+                    ? const BorderSide(color: Colors.blue, width: 1)
+                    : null,
                 avatar: CircleAvatar(
                   radius: 11,
                   backgroundColor: Colors.transparent,
@@ -846,23 +855,24 @@ class FarmComponentsList extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text('$name: ${pricePerPiece.toStringAsFixed(2)} з'),
-                    if (isOverridden) 
+                    if (isOverridden)
                       const Padding(
                         padding: EdgeInsets.only(left: 4.0),
-                        child: Icon(Icons.edit_note, size: 14, color: Colors.blue),
+                        child:
+                            Icon(Icons.edit_note, size: 14, color: Colors.blue),
                       ),
                   ],
                 ),
                 labelStyle: TextStyle(
                   fontSize: 12,
-                  fontWeight: isOverridden ? FontWeight.bold : FontWeight.normal,
+                  fontWeight:
+                      isOverridden ? FontWeight.bold : FontWeight.normal,
                   color: isOverridden ? Colors.blue.shade800 : null,
                 ),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 visualDensity:
                     const VisualDensity(horizontal: 0.0, vertical: -2),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               ),
             );
           }).toList(),
