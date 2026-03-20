@@ -24,8 +24,12 @@
 .pub/
 /build/
 
-# Dart tool Chrome device cache
+# Dart tool
 .dart_tool/chrome-device/
+.dart_tool/flutter_build/
 
 # Node
 /functions/node_modules
+
+# Firebase cache
+.firebase/
