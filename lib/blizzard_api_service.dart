@@ -61,7 +61,8 @@ class BlizzardApiService {
     final token = await _getAccessToken();
     final Set<int> itemIds = await _fetchCommodityIds(token);
     final limitedItemIds = itemIds.take(100).toSet();
-    final List<AuctionItem> items = await _fetchItemDetails(token, limitedItemIds);
+    final List<AuctionItem> items =
+        await _fetchItemDetails(token, limitedItemIds);
     return items;
   }
 
@@ -110,24 +111,33 @@ class BlizzardApiService {
         final nameUri = Uri.https(
           '${WowApiConfig.region}.api.blizzard.com',
           '/data/wow/item/$id',
-          {'namespace': WowApiConfig.staticNamespace, 'locale': WowApiConfig.locale},
+          {
+            'namespace': WowApiConfig.staticNamespace,
+            'locale': WowApiConfig.locale
+          },
         );
         final mediaUri = Uri.https(
           '${WowApiConfig.region}.api.blizzard.com',
           '/data/wow/media/item/$id',
-          {'namespace': WowApiConfig.staticNamespace, 'locale': WowApiConfig.locale},
+          {
+            'namespace': WowApiConfig.staticNamespace,
+            'locale': WowApiConfig.locale
+          },
         );
 
         final responses = await Future.wait([
-          _client.get(_addCacheBust(nameUri), headers: {'Authorization': 'Bearer $token'}),
-          _client.get(_addCacheBust(mediaUri), headers: {'Authorization': 'Bearer $token'}),
+          _client.get(_addCacheBust(nameUri),
+              headers: {'Authorization': 'Bearer $token'}),
+          _client.get(_addCacheBust(mediaUri),
+              headers: {'Authorization': 'Bearer $token'}),
         ]);
 
         if (responses[0].statusCode == 200 && responses[1].statusCode == 200) {
           final nameData = jsonDecode(responses[0].body);
           final mediaData = jsonDecode(responses[1].body);
           final assets = mediaData['assets'] as List?;
-          final iconAsset = assets?.firstWhere((e) => e['key'] == 'icon', orElse: () => null);
+          final iconAsset =
+              assets?.firstWhere((e) => e['key'] == 'icon', orElse: () => null);
 
           items.add(AuctionItem(
             id: id,
@@ -136,7 +146,8 @@ class BlizzardApiService {
           ));
         }
       } catch (e, s) {
-        developer.log('Исключение при обработке предмета $id', error: e, stackTrace: s);
+        developer.log('Исключение при обработке предмета $id',
+            error: e, stackTrace: s);
       }
     }
     return items;
@@ -146,7 +157,7 @@ class BlizzardApiService {
     if (itemIds.isEmpty) return {};
 
     final token = await _getAccessToken();
-    final Map<String, int> itemQuantities = { for (var id in itemIds) id : 0 };
+    final Map<String, int> itemQuantities = {for (var id in itemIds) id: 0};
 
     Uri? nextUri = Uri.https(
         '${WowApiConfig.region}.api.blizzard.com',
@@ -154,11 +165,15 @@ class BlizzardApiService {
         {'namespace': WowApiConfig.namespace, 'locale': WowApiConfig.locale});
 
     while (nextUri != null) {
-      final response = await _client.get(_addCacheBust(nextUri), headers: {'Authorization': 'Bearer $token'});
-      if (response.statusCode != 200) throw Exception('Ошибка commodities: ${response.body}');
-      
+      final response = await _client.get(_addCacheBust(nextUri),
+          headers: {'Authorization': 'Bearer $token'});
+      if (response.statusCode != 200) {
+        throw Exception('Ошибка commodities: ${response.body}');
+      }
+
       final data = jsonDecode(response.body);
-      final auctions = (data['auctions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      final auctions =
+          (data['auctions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
       for (var auction in auctions) {
         final itemId = auction['item']?['id']?.toString();
@@ -170,7 +185,7 @@ class BlizzardApiService {
       final nextLink = data['_links']?['next']?['href'] as String?;
       nextUri = nextLink != null ? Uri.parse(nextLink) : null;
     }
-    
+
     return itemQuantities;
   }
 
@@ -179,7 +194,8 @@ class BlizzardApiService {
 
     final token = await _getAccessToken();
     // Оптимизация: используем Set для поиска за O(1)
-    final Set<int> favoriteIdsSet = itemsToUpdate.keys.map((id) => int.parse(id)).toSet();
+    final Set<int> favoriteIdsSet =
+        itemsToUpdate.keys.map((id) => int.parse(id)).toSet();
     final Map<int, List<Map<String, dynamic>>> auctionsByItem = {};
 
     Uri? nextUri = Uri.https(
@@ -188,11 +204,15 @@ class BlizzardApiService {
         {'namespace': WowApiConfig.namespace, 'locale': WowApiConfig.locale});
 
     while (nextUri != null) {
-      final response = await _client.get(_addCacheBust(nextUri), headers: {'Authorization': 'Bearer $token'});
-      if (response.statusCode != 200) throw Exception('Ошибка commodities: ${response.body}');
-      
+      final response = await _client.get(_addCacheBust(nextUri),
+          headers: {'Authorization': 'Bearer $token'});
+      if (response.statusCode != 200) {
+        throw Exception('Ошибка commodities: ${response.body}');
+      }
+
       final data = jsonDecode(response.body);
-      final auctions = (data['auctions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      final auctions =
+          (data['auctions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
       for (var auction in auctions) {
         final itemId = auction['item']?['id'] as int?;
@@ -201,11 +221,13 @@ class BlizzardApiService {
           auctionsByItem.putIfAbsent(itemId, () => []).add(auction);
         }
       }
-      final nextLink = data['_links']?['_next']?['href'] as String? ?? data['_links']?['next']?['href'] as String?;
+      final nextLink = data['_links']?['_next']?['href'] as String? ??
+          data['_links']?['next']?['href'] as String?;
       nextUri = nextLink != null ? Uri.parse(nextLink) : null;
     }
 
-    developer.log("Обработка данных аукциона для ${auctionsByItem.length} предметов...");
+    developer.log(
+        "Обработка данных аукциона для ${auctionsByItem.length} предметов...");
 
     final WriteBatch batch = _firestore.batch();
     final now = DateTime.now();
@@ -217,14 +239,15 @@ class BlizzardApiService {
 
       int totalItemQuantity = 0;
       for (var auction in itemAuctions) {
-          totalItemQuantity += (auction['quantity'] as int?) ?? 0;
+        totalItemQuantity += (auction['quantity'] as int?) ?? 0;
       }
-      
+
       int targetVolume = (totalItemQuantity * 0.10).ceil();
       if (targetVolume < 1) targetVolume = 1;
       if (targetVolume > 3000) targetVolume = 3000;
 
-      itemAuctions.sort((a, b) => (a['unit_price'] as int).compareTo(b['unit_price'] as int));
+      itemAuctions.sort(
+          (a, b) => (a['unit_price'] as int).compareTo(b['unit_price'] as int));
 
       double minimalCost = (itemAuctions.first['unit_price'] as int) / 10000.0;
       int accumulatedQuantity = 0;
@@ -236,15 +259,16 @@ class BlizzardApiService {
         final unitPrice = (auction['unit_price'] as int) / 10000.0;
 
         if (accumulatedQuantity < targetVolume) {
-          final quantityToConsider = (accumulatedQuantity + quantity) > targetVolume
-              ? targetVolume - accumulatedQuantity
-              : quantity;
-          
+          final quantityToConsider =
+              (accumulatedQuantity + quantity) > targetVolume
+                  ? targetVolume - accumulatedQuantity
+                  : quantity;
+
           totalCostForWeightedAverage += quantityToConsider * unitPrice;
           accumulatedQuantity += quantityToConsider;
           marketPrice = unitPrice;
         } else {
-           break;
+          break;
         }
       }
 
@@ -258,8 +282,8 @@ class BlizzardApiService {
       minimalCost = (minimalCost * 100).round() / 100.0;
 
       final docRef = _firestore.collection('favorites').doc(itemId.toString());
-      
-      // Оптимизация: используем обновление полей с точечной нотацией для мап. 
+
+      // Оптимизация: используем обновление полей с точечной нотацией для мап.
       // Это работает атомарно без необходимости чтения документа (транзакции).
       batch.update(docRef, {
         'minimalCost': minimalCost,
@@ -277,9 +301,19 @@ class BlizzardApiService {
 
   Future<void> downloadMidnightRecipesToFirestore() async {
     final token = await _getAccessToken();
-    // Основные профессии: Алхимия, Кузнечное дело, Наложение чар, Инженерное дело, 
+    // Основные профессии: Алхимия, Кузнечное дело, Наложение чар, Инженерное дело,
     // Начертание, Ювелирное дело, Кожевничество, Портняжное дело, Кулинария.
-    final List<int> professionIds = [171, 164, 333, 202, 773, 755, 165, 197, 185];
+    final List<int> professionIds = [
+      171,
+      164,
+      333,
+      202,
+      773,
+      755,
+      165,
+      197,
+      185
+    ];
     final List<WowRecipe> allRecipes = [];
 
     for (var profId in professionIds) {
@@ -287,15 +321,19 @@ class BlizzardApiService {
         final profUri = Uri.https(
           '${WowApiConfig.region}.api.blizzard.com',
           '/data/wow/profession/$profId',
-          {'namespace': WowApiConfig.staticNamespace, 'locale': WowApiConfig.locale},
+          {
+            'namespace': WowApiConfig.staticNamespace,
+            'locale': WowApiConfig.locale
+          },
         );
-        var profResponse = await _client.get(_addCacheBust(profUri), headers: {'Authorization': 'Bearer $token'});
+        var profResponse = await _client.get(_addCacheBust(profUri),
+            headers: {'Authorization': 'Bearer $token'});
         if (profResponse.statusCode != 200) continue;
 
         var profData = jsonDecode(profResponse.body);
         var profName = profData['name'] as String? ?? 'Unknown';
         var skillTiers = profData['skill_tiers'] as List<dynamic>? ?? [];
-        
+
         // Поиск тира с префиксом Midnight
         var midnightTier = skillTiers.firstWhere(
           (t) => (t['name'] as String? ?? '').contains('Midnight'),
@@ -308,9 +346,13 @@ class BlizzardApiService {
         final tierUri = Uri.https(
           '${WowApiConfig.region}.api.blizzard.com',
           '/data/wow/profession/$profId/skill-tier/$tierId',
-          {'namespace': WowApiConfig.staticNamespace, 'locale': WowApiConfig.locale},
+          {
+            'namespace': WowApiConfig.staticNamespace,
+            'locale': WowApiConfig.locale
+          },
         );
-        var tierResponse = await _client.get(_addCacheBust(tierUri), headers: {'Authorization': 'Bearer $token'});
+        var tierResponse = await _client.get(_addCacheBust(tierUri),
+            headers: {'Authorization': 'Bearer $token'});
         if (tierResponse.statusCode != 200) continue;
 
         var tierData = jsonDecode(tierResponse.body);
@@ -327,16 +369,19 @@ class BlizzardApiService {
         // Пакетная выгрузка рецептов по 10 штук одновременно
         const batchSize = 10;
         for (var i = 0; i < recipeIdsToFetch.length; i += batchSize) {
-          final end = (i + batchSize < recipeIdsToFetch.length) ? i + batchSize : recipeIdsToFetch.length;
+          final end = (i + batchSize < recipeIdsToFetch.length)
+              ? i + batchSize
+              : recipeIdsToFetch.length;
           final batchIds = recipeIdsToFetch.sublist(i, end);
 
-          final futures = batchIds.map((id) => _fetchRecipeDetails(token, id, profName));
+          final futures =
+              batchIds.map((id) => _fetchRecipeDetails(token, id, profName));
           final results = await Future.wait(futures);
           allRecipes.addAll(results.where((r) => r != null).cast<WowRecipe>());
         }
-
       } catch (e, s) {
-         developer.log('Ошибка получения рецептов для профессии $profId', error: e, stackTrace: s);
+        developer.log('Ошибка получения рецептов для профессии $profId',
+            error: e, stackTrace: s);
       }
     }
 
@@ -354,68 +399,80 @@ class BlizzardApiService {
       }
     }
     if (count % 500 != 0) {
-       await batch.commit();
+      await batch.commit();
     }
-    
-    developer.log('Все ${allRecipes.length} рецептов Midnight успешно сохранены в Firestore.');
+
+    developer.log(
+        'Все ${allRecipes.length} рецептов Midnight успешно сохранены в Firestore.');
   }
 
-  Future<WowRecipe?> _fetchRecipeDetails(String token, int recipeId, String professionName) async {
+  Future<WowRecipe?> _fetchRecipeDetails(
+      String token, int recipeId, String professionName) async {
     try {
-      final recipeUri = Uri.https(
-          '${WowApiConfig.region}.api.blizzard.com',
-          '/data/wow/recipe/$recipeId',
-          {'namespace': WowApiConfig.staticNamespace, 'locale': WowApiConfig.locale});
-      final mediaUri = Uri.https(
-          '${WowApiConfig.region}.api.blizzard.com',
-          '/data/wow/media/recipe/$recipeId',
-          {'namespace': WowApiConfig.staticNamespace, 'locale': WowApiConfig.locale});
+      final recipeUri = Uri.https('${WowApiConfig.region}.api.blizzard.com',
+          '/data/wow/recipe/$recipeId', {
+        'namespace': WowApiConfig.staticNamespace,
+        'locale': WowApiConfig.locale
+      });
+      final mediaUri = Uri.https('${WowApiConfig.region}.api.blizzard.com',
+          '/data/wow/media/recipe/$recipeId', {
+        'namespace': WowApiConfig.staticNamespace,
+        'locale': WowApiConfig.locale
+      });
 
       final responses = await Future.wait([
-        _client.get(_addCacheBust(recipeUri), headers: {'Authorization': 'Bearer $token'}),
-        _client.get(_addCacheBust(mediaUri), headers: {'Authorization': 'Bearer $token'}),
+        _client.get(_addCacheBust(recipeUri),
+            headers: {'Authorization': 'Bearer $token'}),
+        _client.get(_addCacheBust(mediaUri),
+            headers: {'Authorization': 'Bearer $token'}),
       ]);
 
       if (responses[0].statusCode == 200) {
         final data = jsonDecode(responses[0].body);
-        
-        final mediaData = responses[1].statusCode == 200 ? jsonDecode(responses[1].body) : null;
+
+        final mediaData = responses[1].statusCode == 200
+            ? jsonDecode(responses[1].body)
+            : null;
         final assets = mediaData?['assets'] as List?;
-        final iconAsset = assets?.firstWhere((e) => e['key'] == 'icon', orElse: () => null);
+        final iconAsset =
+            assets?.firstWhere((e) => e['key'] == 'icon', orElse: () => null);
 
         final name = data['name'] as String? ?? 'Unknown Recipe';
         final craftedItem = data['crafted_item'];
-        final craftedItemId = craftedItem != null ? craftedItem['id'] as int? : null;
+        final craftedItemId =
+            craftedItem != null ? craftedItem['id'] as int? : null;
         final craftedQuantity = data['crafted_quantity']?['value'] as int?;
 
         final reagentsList = data['reagents'] as List<dynamic>? ?? [];
         final List<RecipeReagent> parsedReagents = [];
-        
+
         for (var r in reagentsList) {
-           final reagentItem = r['reagent'];
-           if (reagentItem != null) {
-              parsedReagents.add(RecipeReagent(
-                 itemId: reagentItem['id'],
-                 name: reagentItem['name'] ?? 'Unknown Reagent',
-                 quantity: r['quantity'] as int? ?? 1,
-              ));
-           }
+          final reagentItem = r['reagent'];
+          if (reagentItem != null) {
+            parsedReagents.add(RecipeReagent(
+              itemId: reagentItem['id'],
+              name: reagentItem['name'] ?? 'Unknown Reagent',
+              quantity: r['quantity'] as int? ?? 1,
+            ));
+          }
         }
 
         // В Dragonflight / TWW / Midnight API Blizzard скрывает базовые реагенты, имеющие качество (ранги 1-2-3).
         // Это известный баг API, на который жалуются многие разработчики.
         // Тем не менее, API отдает опциональные слоты крафта (modified_crafting_slots), такие как отделочные реагенты, спарк и т.д.
         // Добавим их в список реагентов для отображения.
-        final modifiedSlots = data['modified_crafting_slots'] as List<dynamic>? ?? [];
+        final modifiedSlots =
+            data['modified_crafting_slots'] as List<dynamic>? ?? [];
         for (var slot in modifiedSlots) {
-           final slotType = slot['slot_type'];
-           if (slotType != null) {
-              parsedReagents.add(RecipeReagent(
-                 itemId: slotType['id'], // Используем ID типа слота (это не item ID, но нужно для уникальности)
-                 name: slotType['name'] ?? 'Опциональный реагент',
-                 quantity: 1,
-              ));
-           }
+          final slotType = slot['slot_type'];
+          if (slotType != null) {
+            parsedReagents.add(RecipeReagent(
+              itemId: slotType[
+                  'id'], // Используем ID типа слота (это не item ID, но нужно для уникальности)
+              name: slotType['name'] ?? 'Опциональный реагент',
+              quantity: 1,
+            ));
+          }
         }
 
         return WowRecipe(
@@ -429,7 +486,8 @@ class BlizzardApiService {
         );
       }
     } catch (e, s) {
-      developer.log('Ошибка при получении деталей рецепта $recipeId', error: e, stackTrace: s);
+      developer.log('Ошибка при получении деталей рецепта $recipeId',
+          error: e, stackTrace: s);
     }
     return null;
   }
