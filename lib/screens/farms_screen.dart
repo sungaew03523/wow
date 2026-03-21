@@ -67,13 +67,10 @@ class _FarmsScreenState extends State<FarmsScreen> {
     'Кузнечное дело',
     'Наложение чар',
     'Инженерное дело',
-    'Травничество',
     'Начертание',
     'Ювелирное дело',
     'Кожевничество',
     'Портняжное дело',
-    'Горное дело',
-    'Снятие шкур',
   ];
 
   Future<void> _showFarmDialog({Farm? farm}) async {
@@ -670,7 +667,7 @@ class FarmProfitCalculator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (formula.isEmpty) return const SizedBox.shrink();
+    if (formula.trim().isEmpty) return const SizedBox.shrink();
 
     final itemNames = _extractItemNames(formula);
 
@@ -690,13 +687,17 @@ class FarmProfitCalculator extends StatelessWidget {
           '"$name"', effectivePrices[name]?.toString() ?? '0');
     }
 
+    if (formulaWithPrices.trim().isEmpty) return const SizedBox.shrink();
+
     double profit = 0;
     String? error;
     try {
       profit = formulaWithPrices.interpret().toDouble();
     } catch (e) {
       error = e.toString();
+      debugPrint('Ошибка вычисления формулы ($formulaWithPrices): $e');
     }
+
 
     if (error != null) {
       return Tooltip(
@@ -737,7 +738,7 @@ class FarmComponentsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (formula.isEmpty) return const SizedBox.shrink();
+    if (formula.trim().isEmpty) return const SizedBox.shrink();
 
     final RegExp nameRegex = RegExp(r'"([^"]+)"');
     final allItemNames =

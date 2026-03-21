@@ -22,6 +22,20 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final BlizzardApiService _apiService = BlizzardApiService();
   Timer? _timer;
+  String? _selectedFilterProfession;
+  bool _isSelectionMode = false;
+  final Set<int> _selectedIds = {};
+
+  final List<String> _professions = [
+    'Алхимия',
+    'Кузнечное дело',
+    'Наложение чар',
+    'Инженерное дело',
+    'Начертание',
+    'Ювелирное дело',
+    'Кожевничество',
+    'Портняжное дело',
+  ];
 
   final Stream<QuerySnapshot> _favoritesStream = FirebaseFirestore.instance
       .collection('favorites')
@@ -272,6 +286,53 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     }
   }
 
+  void _showBulkProfessionsDialog() {
+    List<String> selected = [];
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Массовое назначение профессий'),
+          content: SizedBox(
+            width: 300,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: _professions.map((p) => CheckboxListTile(
+                  title: Text(p),
+                  value: selected.contains(p),
+                  onChanged: (val) => setDialogState(() {
+                    if (val == true) selected.add(p); else selected.remove(p);
+                  }),
+                )).toList(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+            ElevatedButton(
+              onPressed: () async {
+                final batch = _firestore.batch();
+                for (var id in _selectedIds) {
+                  batch.update(_firestore.collection('favorites').doc(id.toString()), {'professions': selected});
+                }
+                await batch.commit();
+                if (mounted) {
+                  setState(() {
+                    _isSelectionMode = false;
+                    _selectedIds.clear();
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Применить'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -323,17 +384,40 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         return const Center(
                             child: Text('Нет избранных предметов.'));
                       }
+
+                      var favoriteItems = favoriteDocs.map((doc) => AuctionItem.fromFirestore(doc)).toList();
+                      
+                      if (_selectedFilterProfession != null) {
+                        favoriteItems = favoriteItems.where((item) => 
+                          item.professions.contains(_selectedFilterProfession)).toList();
+                      }
+
+                      if (favoriteItems.isEmpty) {
+                        return const Center(child: Text('Нет предметов для выбранной профессии.'));
+                      }
+
                       return ListView.builder(
-                        itemCount: favoriteDocs.length,
+                        itemCount: favoriteItems.length,
                         itemBuilder: (context, index) {
-                          final item =
-                              AuctionItem.fromFirestore(favoriteDocs[index]);
+                          final item = favoriteItems[index];
                           final itemInvestments =
                               investmentsByItem[item.id.toString()] ?? [];
                           return FavoriteItemRow(
                             item: item,
                             itemInvestments: itemInvestments,
+                            allProfessions: _professions,
                             key: ValueKey(item.id),
+                            isSelected: _selectedIds.contains(item.id),
+                            isSelectionMode: _isSelectionMode,
+                            onToggleSelection: (id) {
+                              setState(() {
+                                if (_selectedIds.contains(id)) {
+                                  _selectedIds.remove(id);
+                                } else {
+                                  _selectedIds.add(id);
+                                }
+                              });
+                            },
                           );
                         },
                       );
@@ -362,6 +446,35 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       alignment: WrapAlignment.end,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        DropdownButton<String?>(
+          value: _selectedFilterProfession,
+          hint: const Text('Фильтр по профессии'),
+          items: [
+            const DropdownMenuItem<String?>(value: null, child: Text('Все профессии')),
+            ..._professions.map((p) => DropdownMenuItem(value: p, child: Text(p))),
+          ],
+          onChanged: (val) {
+            setState(() => _selectedFilterProfession = val);
+          },
+        ),
+        const SizedBox(width: 8),
+        if (_isSelectionMode && _selectedIds.isNotEmpty)
+          ElevatedButton.icon(
+            style: buttonStyle.copyWith(backgroundColor: WidgetStateProperty.all(Colors.blueGrey)),
+            onPressed: _showBulkProfessionsDialog,
+            icon: const Icon(Icons.assignment, size: 20),
+            label: Text('Назначить (${_selectedIds.length})'),
+          ),
+        IconButton(
+          icon: Icon(_isSelectionMode ? Icons.check_box : Icons.check_box_outline_blank),
+          tooltip: _isSelectionMode ? 'Выйти из режима выбора' : 'Режим выбора',
+          onPressed: () {
+            setState(() {
+              _isSelectionMode = !_isSelectionMode;
+              if (!_isSelectionMode) _selectedIds.clear();
+            });
+          },
+        ),
         ElevatedButton.icon(
           style: buttonStyle,
           onPressed: _isPriceUpdating ? null : _updateFavoritePrices,
@@ -404,10 +517,21 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       child: Row(
         children: [
-          const SizedBox(width: 52), // Icon + padding
+          if (_isSelectionMode)
+            const SizedBox(
+              width: 52,
+              child: Center(child: Icon(Icons.check_box_outline_blank, size: 20, color: Colors.grey)),
+            )
+          else
+            const SizedBox(width: 52), // Icon + padding
           Expanded(
               flex: 2,
               child: Text('Название', style: theme.textTheme.titleMedium)),
+          SizedBox(
+              width: 120,
+              child: Text('Профессии',
+                  style: theme.textTheme.titleMedium,
+                  textAlign: TextAlign.center)),
           SizedBox(
               width: 100,
               child: Text('Объем',
@@ -437,10 +561,18 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 class FavoriteItemRow extends StatefulWidget {
   final AuctionItem item;
   final List<DocumentSnapshot> itemInvestments;
+  final List<String> allProfessions;
+  final bool isSelected;
+  final bool isSelectionMode;
+  final Function(int) onToggleSelection;
 
   const FavoriteItemRow({
     required this.item,
     required this.itemInvestments,
+    required this.allProfessions,
+    required this.isSelected,
+    required this.isSelectionMode,
+    required this.onToggleSelection,
     super.key,
   });
 
@@ -459,11 +591,18 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(4.0),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-        child: Row(
-          children: [
-            Container(
+      child: InkWell(
+        onTap: widget.isSelectionMode ? () => widget.onToggleSelection(widget.item.id) : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+          child: Row(
+            children: [
+              if (widget.isSelectionMode)
+                Checkbox(
+                  value: widget.isSelected,
+                  onChanged: (val) => widget.onToggleSelection(widget.item.id),
+                ),
+              Container(
               width: 36,
               height: 36,
               decoration: BoxDecoration(
@@ -485,6 +624,10 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                 flex: 2,
                 child: Text(widget.item.name,
                     style: Theme.of(context).textTheme.bodyLarge)),
+            SizedBox(
+              width: 120, 
+              child: _buildProfessionsCell(context),
+            ),
             SizedBox(
               width: 100,
               child: Row(
@@ -561,8 +704,9 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Future<void> _showAddInvestmentDialog(
       BuildContext context, AuctionItem item) async {
@@ -740,6 +884,97 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
             ),
           ],
         ));
+  }
+
+  Widget _buildProfessionsCell(BuildContext context) {
+    final professions = widget.item.professions;
+    
+    return InkWell(
+      onTap: () => _showProfessionsDialog(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        child: professions.isEmpty
+            ? const Center(
+                child: Icon(Icons.add_circle_outline, 
+                    size: 18, color: Colors.grey),
+              )
+            : Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                alignment: WrapAlignment.center,
+                children: professions.map((p) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.blueAccent.withAlpha(50),
+                    border: Border.all(color: Colors.blueAccent, width: 0.5),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    p.substring(0, 1).toUpperCase(), // Показываем первую букву
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                )).toList(),
+              ),
+      ),
+    );
+  }
+
+  void _showProfessionsDialog(BuildContext context) {
+    List<String> selected = List<String>.from(widget.item.professions);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Профессии для "${widget.item.name}"'),
+              content: SizedBox(
+                width: 300,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: widget.allProfessions.map((p) {
+                      final isSelected = selected.contains(p);
+                      return CheckboxListTile(
+                        title: Text(p),
+                        value: isSelected,
+                        onChanged: (val) {
+                          setDialogState(() {
+                            if (val == true) {
+                              selected.add(p);
+                            } else {
+                              selected.remove(p);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Отмена'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await FirebaseFirestore.instance
+                        .collection('favorites')
+                        .doc(widget.item.id.toString())
+                        .update({'professions': selected});
+                    if (mounted) Navigator.pop(context);
+                  },
+                  child: const Text('Сохранить'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildPriceHistoryChart(BuildContext context, AuctionItem item) {

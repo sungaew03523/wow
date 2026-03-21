@@ -6,6 +6,8 @@ import 'screens/favorites_screen.dart';
 import 'screens/farms_screen.dart';
 import 'screens/crafts_screen.dart';
 
+import 'screens/farms2_screen.dart';
+
 // --- Навигация ---
 final GoRouter router = GoRouter(
   routes: <RouteBase>[
@@ -33,5 +35,13 @@ final GoRouter router = GoRouter(
         return const CraftsScreen();
       },
     ),
+    GoRoute(
+      path: '/farms2',
+      builder: (BuildContext context, GoRouterState state) {
+        return const Farms2Screen();
+      },
+    ),
   ],
 );
+
+

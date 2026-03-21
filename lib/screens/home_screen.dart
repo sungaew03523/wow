@@ -261,6 +261,13 @@ class _CustomAppBarState extends State<CustomAppBar> {
               child: const Text('Крафты',
                   style: TextStyle(color: Color(0xFFD4BF7A), fontSize: 16)),
             ),
+            const SizedBox(width: 20),
+            TextButton(
+              onPressed: () => router.go('/farms2'),
+              child: const Text('Фармы 2.0',
+                  style: TextStyle(color: Colors.cyanAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+
             const Spacer(),
             Expanded(
               flex: 2,

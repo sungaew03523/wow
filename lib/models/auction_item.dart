@@ -11,6 +11,7 @@ class AuctionItem {
   final Map<String, dynamic>? averagePriceHistory;
   final Map<String, dynamic>? totalQuantityHistory;
   final int analysisVolume;
+  final List<String> professions;
 
   AuctionItem({
     required this.id,
@@ -22,6 +23,7 @@ class AuctionItem {
     this.averagePriceHistory,
     this.totalQuantityHistory,
     this.analysisVolume = 1000,
+    this.professions = const [],
   });
 
   factory AuctionItem.fromFirestore(DocumentSnapshot doc) {
@@ -40,6 +42,7 @@ class AuctionItem {
           ? Map<String, dynamic>.from(data['totalQuantityHistory'])
           : null,
       analysisVolume: data['analysisVolume'] ?? 1000,
+      professions: List<String>.from(data['professions'] ?? []),
     );
   }
 
@@ -49,6 +52,7 @@ class AuctionItem {
       'name': name,
       'iconUrl': iconUrl,
       'analysisVolume': analysisVolume,
+      'professions': professions,
       if (minimalCost != null) 'minimalCost': minimalCost,
       if (marketPrice != null) 'marketPrice': marketPrice,
       if (weightedAveragePrice != null)
