@@ -31,5 +31,7 @@
 # Node
 /functions/node_modules
 
-# Firebase cache
+# Temporary and Build Files
+.dart_tool/
 .firebase/
+
