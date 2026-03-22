@@ -688,17 +688,26 @@ class Farm2Card extends StatelessWidget {
     final double baseRevenue =
         _calculateFormula(farm.revenueFormula, favorites, overrides) * 0.95;
 
-    // Находчивость экономит Базовые 33.3% * (1 + бонус талантов) при срабатывании
+    // Находчивость дает возврат материалов: Базовые 33.3% * (1 + бонус талантов) при срабатывании
     final double actualResSavings = (1.0 / 3.0) * (1 + farm.resSavings);
-    final double resGainMultiplier = 1 - (farm.resourcefulness / 100.0) * actualResSavings;
-    final double effectiveCost = _calculateFormulaWithResourcefulness(farm.costsFormula, favorites, resGainMultiplier, overrides);
-    
+    final double resGainMultiplier =
+        1 - (farm.resourcefulness / 100.0) * actualResSavings;
+
+    // Считаем выгоду от находчивости (стоимость возвращенных ресурсов)
+    final double resGain = baseCost -
+        _calculateFormulaWithResourcefulness(
+            farm.costsFormula, favorites, resGainMultiplier, overrides);
+
+    // Затраты теперь считаем полными (без вычета находчивости, по просьбе пользователя)
+    final double effectiveCost = baseCost;
+
     // Мультикрафт дает в среднем N% к выходу при срабатывании (N = farm.multiYield)
     final double avgRevenueBonus = (farm.multicraft / 100.0) * farm.multiYield;
-    final double effectiveRevenue = baseRevenue * (1 + avgRevenueBonus);
+    final double multiGain = baseRevenue * avgRevenueBonus;
 
-    final double resGain = baseCost - effectiveCost;
-    final double multiGain = effectiveRevenue - baseRevenue;
+    // Итоговая выручка включает базу + бонус мультикрафта + возврат от находчивости
+    final double effectiveRevenue = baseRevenue + multiGain + resGain;
+
     final double baseProfit = baseRevenue - baseCost;
     final double profitPerCraft = effectiveRevenue - effectiveCost;
 
@@ -819,7 +828,7 @@ class Farm2Card extends StatelessWidget {
                             const Spacer(),
                             Tooltip(
                               message:
-                                  'Базовая прибыль: ${baseProfit.toStringAsFixed(0)}з\nНаходчивость: +${resGain.toStringAsFixed(0)}з\nМультикрафт: +${multiGain.toStringAsFixed(0)}з\n(Нажмите для подробного расчета)',
+                                  'Базовая прибыль: ${baseProfit.toStringAsFixed(0)}з\nНаходчивость (возврат): +${resGain.toStringAsFixed(0)}з\nМультикрафт: +${multiGain.toStringAsFixed(0)}з\n(Нажмите для подробного расчета)',
                               child: InkWell(
                                 onTap: () => _showCalculationDetails(
                                     context, favorites, overrides),
@@ -914,11 +923,21 @@ class Farm2Card extends StatelessWidget {
         _calculateFormula(farm.revenueFormula, favorites, overrides) * 0.95;
 
     final double actualResSavings = (1.0 / 3.0) * (1 + farm.resSavings);
-    final double resGainMultiplier = 1 - (farm.resourcefulness / 100.0) * actualResSavings;
-    final double effectiveCost = _calculateFormulaWithResourcefulness(farm.costsFormula, favorites, resGainMultiplier, overrides);
-    
-    debugPrint('DEBUG: Resourcefulness logic: Base 33.3% * (1 + ${farm.resSavings}) = $actualResSavings');
-    debugPrint('DEBUG: Multiplier calculation: 1 - (${farm.resourcefulness}/100 * $actualResSavings) = ${1 - (farm.resourcefulness/100 * actualResSavings)}');
+    final double resGainMultiplier =
+        1 - (farm.resourcefulness / 100.0) * actualResSavings;
+    final double resGain = baseCost -
+        _calculateFormulaWithResourcefulness(
+            farm.costsFormula, favorites, resGainMultiplier, overrides);
+
+    final double avgRevenueBonus = (farm.multicraft / 100.0) * farm.multiYield;
+    final double multiGain = baseRevenue * avgRevenueBonus;
+    final double effectiveRevenue = baseRevenue + multiGain + resGain;
+    final double profitPerCraft = effectiveRevenue - baseCost;
+
+    debugPrint(
+        'DEBUG: Resourcefulness logic: Base 33.3% * (1 + ${farm.resSavings}) = $actualResSavings');
+    debugPrint(
+        'DEBUG: Gain multiplier calculation: 1 - (${farm.resourcefulness}/100 * $actualResSavings) = $resGainMultiplier');
 
     // Собираем отладочную информацию
     String costsDebug = farm.costsFormula;
@@ -946,7 +965,10 @@ class Farm2Card extends StatelessWidget {
       final parts = farm.costsFormula.split('+');
       for (var part in parts) {
         final double rawCost = _calculateFormula(part, favorites, overrides);
-        final double partCost = _calculateFormulaWithResourcefulness(part, favorites, resGainMultiplier, overrides);
+        final double partResGain =
+            rawCost -
+            _calculateFormulaWithResourcefulness(
+                part, favorites, resGainMultiplier, overrides);
         
         String partTitle = part.trim();
         final nameMatches = RegExp(r'"([^"]+)"').allMatches(part);
@@ -963,8 +985,14 @@ class Farm2Card extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('База: ${rawCost.toStringAsFixed(1)}з', style: const TextStyle(color: Colors.white54, fontSize: 10)),
-                  Text('${partCost.toStringAsFixed(1)}з', style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                  Text('База: ${rawCost.toStringAsFixed(1)}з',
+                      style: const TextStyle(
+                          color: Colors.white54, fontSize: 10)),
+                  Text('+${partResGain.toStringAsFixed(1)}з (возврат)',
+                      style: const TextStyle(
+                          color: Colors.orangeAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
             ],
@@ -1027,16 +1055,23 @@ class Farm2Card extends StatelessWidget {
                         fontSize: 10,
                         fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
-                _buildDebugRow('Базовая Себестоимость', '${baseCost.toStringAsFixed(1)} з', color: Colors.white54),
-                _buildDebugRow('Итоговая эконом. Находчивости', '${(actualResSavings * 100).round()}%', color: Colors.white54),
+                _buildDebugRow(
+                    'Базовая Себестоимость (X)', '${baseCost.toStringAsFixed(1)} з',
+                    color: Colors.white54),
+                _buildDebugRow('Бонус Мультикрафта',
+                    '+${multiGain.toStringAsFixed(1)} з',
+                    color: Colors.white54),
+                _buildDebugRow('Возврат Находчивости (Y)',
+                    '+${resGain.toStringAsFixed(1)} з',
+                    color: Colors.white54),
                 const SizedBox(height: 4),
-                _buildDebugRow('Эфф. Выручка',
-                    '${(baseRevenue * (1 + (farm.multicraft / 100 * farm.multiYield))).toStringAsFixed(1)} з'),
-                _buildDebugRow('Эфф. Затраты',
-                    '- ${effectiveCost.toStringAsFixed(1)} з'),
+                _buildDebugRow('Эфф. Выручка (База + Мульти + Находчивость)',
+                    '${effectiveRevenue.toStringAsFixed(1)} з'),
+                _buildDebugRow(
+                    'Эфф. Затраты (Полные)', '- ${baseCost.toStringAsFixed(1)} з'),
                 const Divider(color: Color(0xFFD4BF7A), thickness: 1),
                 _buildDebugRow('Прибыль за крафт',
-                    '${((baseRevenue * (1 + (farm.multicraft / 100 * farm.multiYield))) - effectiveCost).toStringAsFixed(2)} з',
+                    '${profitPerCraft.toStringAsFixed(2)} з',
                     color: Colors.greenAccent),
               ],
             ),
