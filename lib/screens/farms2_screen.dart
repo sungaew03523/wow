@@ -114,7 +114,7 @@ class _Farms2ScreenState extends State<Farms2Screen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Фармы v2.0',
+        title: Text('Фармы',
             style: GoogleFonts.oswald(fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.home),

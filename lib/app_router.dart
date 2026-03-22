@@ -28,7 +28,7 @@ final GoRouter router = GoRouter(
       },
     ),
     GoRoute(
-      path: '/farms2',
+      path: '/farms',
       builder: (BuildContext context, GoRouterState state) {
         return const Farms2Screen();
       },
