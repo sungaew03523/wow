@@ -543,7 +543,7 @@ class _Farms2ScreenState extends State<Farms2Screen> {
                         label: const Text('Добавить доход')),
                     const Divider(),
                     Text(
-                        'Находчивость: ${resValue.round()}% (Доп. бонус: +${(resSavings * 100).round()}%, итого экономия: ${(0.3 * (1 + resSavings) * 100).round()}%)',
+                        'Находчивость: ${resValue.round()}% (Доп. бонус: +${(resSavings * 100).round()}%, итого экономия: ${(0.35 * (1 + resSavings) * 100).round()}%)',
                         style: const TextStyle(fontSize: 12)),
                     Slider(
                         value: resValue,
@@ -688,8 +688,8 @@ class Farm2Card extends StatelessWidget {
     final double baseRevenue =
         _calculateFormula(farm.revenueFormula, favorites, overrides) * 0.95;
 
-    // Находчивость дает возврат материалов: Базовые 33.3% * (1 + бонус талантов) при срабатывании
-    final double actualResSavings = (1.0 / 3.0) * (1 + farm.resSavings);
+    // Находчивость дает возврат материалов: Базовые 35% * (1 + бонус талантов) при срабатывании
+    final double actualResSavings = 0.35 * (1 + farm.resSavings);
     final double resGainMultiplier =
         1 - (farm.resourcefulness / 100.0) * actualResSavings;
 
@@ -922,7 +922,7 @@ class Farm2Card extends StatelessWidget {
     final double baseRevenue =
         _calculateFormula(farm.revenueFormula, favorites, overrides) * 0.95;
 
-    final double actualResSavings = (1.0 / 3.0) * (1 + farm.resSavings);
+    final double actualResSavings = 0.35 * (1 + farm.resSavings);
     final double resGainMultiplier =
         1 - (farm.resourcefulness / 100.0) * actualResSavings;
     final double resGain = baseCost -
@@ -935,7 +935,7 @@ class Farm2Card extends StatelessWidget {
     final double profitPerCraft = effectiveRevenue - baseCost;
 
     debugPrint(
-        'DEBUG: Resourcefulness logic: Base 33.3% * (1 + ${farm.resSavings}) = $actualResSavings');
+        'DEBUG: Resourcefulness logic: Base 35% * (1 + ${farm.resSavings}) = $actualResSavings');
     debugPrint(
         'DEBUG: Gain multiplier calculation: 1 - (${farm.resourcefulness}/100 * $actualResSavings) = $resGainMultiplier');
 
