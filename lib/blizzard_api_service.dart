@@ -297,5 +297,4 @@ class BlizzardApiService {
     await batch.commit();
     developer.log("Все цены успешно обновлены пакетом.");
   }
-
 }

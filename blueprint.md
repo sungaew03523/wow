@@ -39,3 +39,12 @@
     *   Карточки предметов имеют тень для создания эффекта глубины.
     *   Иконки предметов загружаются напрямую из Blizzard API, что обеспечивает аутентичный вид.
 
+## Развертывание (Deployment)
+
+В данном проекте используется стандартный **Firebase Hosting (Classic)** для размещения веб-приложения. Решение принято на основе доступности тарифного плана Spark (бесплатный), в то время как Firebase App Hosting требует план Blaze.
+
+*   **Firebase Project ID:** `wow-07031761-fffab`
+*   **Hosting Site:** `wow-07031761-fffab`
+*   **Target:** `build/web`
+*   **Command:** `firebase deploy --only hosting` (после выполнения `flutter build web`)
+

@@ -698,7 +698,6 @@ class FarmProfitCalculator extends StatelessWidget {
       debugPrint('Ошибка вычисления формулы ($formulaWithPrices): $e');
     }
 
-
     if (error != null) {
       return Tooltip(
           message: error,

@@ -298,23 +298,33 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: _professions.map((p) => CheckboxListTile(
-                  title: Text(p),
-                  value: selected.contains(p),
-                  onChanged: (val) => setDialogState(() {
-                    if (val == true) selected.add(p); else selected.remove(p);
-                  }),
-                )).toList(),
+                children: _professions
+                    .map((p) => CheckboxListTile(
+                          title: Text(p),
+                          value: selected.contains(p),
+                          onChanged: (val) => setDialogState(() {
+                            if (val == true) {
+                              selected.add(p);
+                            } else {
+                              selected.remove(p);
+                            }
+                          }),
+                        ))
+                    .toList(),
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Отмена')),
             ElevatedButton(
               onPressed: () async {
                 final batch = _firestore.batch();
                 for (var id in _selectedIds) {
-                  batch.update(_firestore.collection('favorites').doc(id.toString()), {'professions': selected});
+                  batch.update(
+                      _firestore.collection('favorites').doc(id.toString()),
+                      {'professions': selected});
                 }
                 await batch.commit();
                 if (mounted) {
@@ -385,15 +395,21 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                             child: Text('Нет избранных предметов.'));
                       }
 
-                      var favoriteItems = favoriteDocs.map((doc) => AuctionItem.fromFirestore(doc)).toList();
-                      
+                      var favoriteItems = favoriteDocs
+                          .map((doc) => AuctionItem.fromFirestore(doc))
+                          .toList();
+
                       if (_selectedFilterProfession != null) {
-                        favoriteItems = favoriteItems.where((item) => 
-                          item.professions.contains(_selectedFilterProfession)).toList();
+                        favoriteItems = favoriteItems
+                            .where((item) => item.professions
+                                .contains(_selectedFilterProfession))
+                            .toList();
                       }
 
                       if (favoriteItems.isEmpty) {
-                        return const Center(child: Text('Нет предметов для выбранной профессии.'));
+                        return const Center(
+                            child:
+                                Text('Нет предметов для выбранной профессии.'));
                       }
 
                       return ListView.builder(
@@ -450,8 +466,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           value: _selectedFilterProfession,
           hint: const Text('Фильтр по профессии'),
           items: [
-            const DropdownMenuItem<String?>(value: null, child: Text('Все профессии')),
-            ..._professions.map((p) => DropdownMenuItem(value: p, child: Text(p))),
+            const DropdownMenuItem<String?>(
+                value: null, child: Text('Все профессии')),
+            ..._professions
+                .map((p) => DropdownMenuItem(value: p, child: Text(p))),
           ],
           onChanged: (val) {
             setState(() => _selectedFilterProfession = val);
@@ -460,13 +478,16 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         const SizedBox(width: 8),
         if (_isSelectionMode && _selectedIds.isNotEmpty)
           ElevatedButton.icon(
-            style: buttonStyle.copyWith(backgroundColor: WidgetStateProperty.all(Colors.blueGrey)),
+            style: buttonStyle.copyWith(
+                backgroundColor: WidgetStateProperty.all(Colors.blueGrey)),
             onPressed: _showBulkProfessionsDialog,
             icon: const Icon(Icons.assignment, size: 20),
             label: Text('Назначить (${_selectedIds.length})'),
           ),
         IconButton(
-          icon: Icon(_isSelectionMode ? Icons.check_box : Icons.check_box_outline_blank),
+          icon: Icon(_isSelectionMode
+              ? Icons.check_box
+              : Icons.check_box_outline_blank),
           tooltip: _isSelectionMode ? 'Выйти из режима выбора' : 'Режим выбора',
           onPressed: () {
             setState(() {
@@ -520,7 +541,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           if (_isSelectionMode)
             const SizedBox(
               width: 52,
-              child: Center(child: Icon(Icons.check_box_outline_blank, size: 20, color: Colors.grey)),
+              child: Center(
+                  child: Icon(Icons.check_box_outline_blank,
+                      size: 20, color: Colors.grey)),
             )
           else
             const SizedBox(width: 52), // Icon + padding
@@ -592,7 +615,9 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
         borderRadius: BorderRadius.circular(4.0),
       ),
       child: InkWell(
-        onTap: widget.isSelectionMode ? () => widget.onToggleSelection(widget.item.id) : null,
+        onTap: widget.isSelectionMode
+            ? () => widget.onToggleSelection(widget.item.id)
+            : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
           child: Row(
@@ -603,110 +628,112 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
                   onChanged: (val) => widget.onToggleSelection(widget.item.id),
                 ),
               Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFD4BF7A), width: 1.5),
-                borderRadius: BorderRadius.circular(4),
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  border:
+                      Border.all(color: const Color(0xFFD4BF7A), width: 1.5),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: widget.item.iconUrl != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(3.0),
+                        child: Image.network(widget.item.iconUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) =>
+                                const Icon(Icons.error, size: 20)),
+                      )
+                    : const Icon(Icons.inventory_2, size: 20),
               ),
-              child: widget.item.iconUrl != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(3.0),
-                      child: Image.network(widget.item.iconUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) =>
-                              const Icon(Icons.error, size: 20)),
-                    )
-                  : const Icon(Icons.inventory_2, size: 20),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-                flex: 2,
-                child: Text(widget.item.name,
-                    style: Theme.of(context).textTheme.bodyLarge)),
-            SizedBox(
-              width: 120, 
-              child: _buildProfessionsCell(context),
-            ),
-            SizedBox(
-              width: 100,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    (() {
-                      final history = widget.item.totalQuantityHistory;
-                      final totalQty = (history != null && history.isNotEmpty)
-                          ? history.values.last
-                          : 0;
-                      if (totalQty == 0) return '-';
-                      int vol = (totalQty * 0.10).ceil();
-                      if (vol < 1) vol = 1;
-                      if (vol > 3000) vol = 3000;
-                      return vol.toString();
-                    })(),
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ],
+              const SizedBox(width: 16),
+              Expanded(
+                  flex: 2,
+                  child: Text(widget.item.name,
+                      style: Theme.of(context).textTheme.bodyLarge)),
+              SizedBox(
+                width: 120,
+                child: _buildProfessionsCell(context),
               ),
-            ),
-            Expanded(
-                flex: 3, child: _buildPriceHistoryChart(context, widget.item)),
-            SizedBox(
-              width: 150,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.add_shopping_cart),
-                    tooltip: 'Добавить/Изменить покупку',
-                    onPressed: () =>
-                        _showAddInvestmentDialog(context, widget.item),
-                  ),
-                  _buildProfitDisplay(widget.item, widget.itemInvestments),
-                ],
-              ),
-            ),
-            SizedBox(
-              width: 90,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Tooltip(
-                    message: 'Очистить историю предмета',
-                    child: IconButton(
-                      padding: const EdgeInsets.all(8),
-                      constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.history_toggle_off_outlined),
-                      onPressed: () =>
-                          _clearSingleItemHistory(context, widget.item),
-                      color: Colors.grey[400],
-                      iconSize: 20,
-                      splashRadius: 18,
+              SizedBox(
+                width: 100,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      (() {
+                        final history = widget.item.totalQuantityHistory;
+                        final totalQty = (history != null && history.isNotEmpty)
+                            ? history.values.last
+                            : 0;
+                        if (totalQty == 0) return '-';
+                        int vol = (totalQty * 0.10).ceil();
+                        if (vol < 1) vol = 1;
+                        if (vol > 3000) vol = 3000;
+                        return vol.toString();
+                      })(),
+                      style: Theme.of(context).textTheme.bodyLarge,
                     ),
-                  ),
-                  Tooltip(
-                    message: 'Удалить из избранного',
-                    child: IconButton(
-                      padding: const EdgeInsets.all(8),
-                      constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.star),
-                      onPressed: () =>
-                          _toggleFavorite(context, widget.item, true),
-                      color: const Color(0xFFFFC700),
-                      iconSize: 22,
-                      splashRadius: 18,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              Expanded(
+                  flex: 3,
+                  child: _buildPriceHistoryChart(context, widget.item)),
+              SizedBox(
+                width: 150,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.add_shopping_cart),
+                      tooltip: 'Добавить/Изменить покупку',
+                      onPressed: () =>
+                          _showAddInvestmentDialog(context, widget.item),
+                    ),
+                    _buildProfitDisplay(widget.item, widget.itemInvestments),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: 90,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Tooltip(
+                      message: 'Очистить историю предмета',
+                      child: IconButton(
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.history_toggle_off_outlined),
+                        onPressed: () =>
+                            _clearSingleItemHistory(context, widget.item),
+                        color: Colors.grey[400],
+                        iconSize: 20,
+                        splashRadius: 18,
+                      ),
+                    ),
+                    Tooltip(
+                      message: 'Удалить из избранного',
+                      child: IconButton(
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.star),
+                        onPressed: () =>
+                            _toggleFavorite(context, widget.item, true),
+                        color: const Color(0xFFFFC700),
+                        iconSize: 22,
+                        splashRadius: 18,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Future<void> _showAddInvestmentDialog(
       BuildContext context, AuctionItem item) async {
@@ -888,33 +915,40 @@ class _FavoriteItemRowState extends State<FavoriteItemRow> {
 
   Widget _buildProfessionsCell(BuildContext context) {
     final professions = widget.item.professions;
-    
+
     return InkWell(
       onTap: () => _showProfessionsDialog(context),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         child: professions.isEmpty
             ? const Center(
-                child: Icon(Icons.add_circle_outline, 
+                child: Icon(Icons.add_circle_outline,
                     size: 18, color: Colors.grey),
               )
             : Wrap(
                 spacing: 4,
                 runSpacing: 4,
                 alignment: WrapAlignment.center,
-                children: professions.map((p) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.blueAccent.withAlpha(50),
-                    border: Border.all(color: Colors.blueAccent, width: 0.5),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    p.substring(0, 1).toUpperCase(), // Показываем первую букву
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                )).toList(),
+                children: professions
+                    .map((p) => Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blueAccent.withAlpha(50),
+                            border: Border.all(
+                                color: Colors.blueAccent, width: 0.5),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            p
+                                .substring(0, 1)
+                                .toUpperCase(), // Показываем первую букву
+                            style: const TextStyle(
+                                fontSize: 10, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                          ),
+                        ))
+                    .toList(),
               ),
       ),
     );
