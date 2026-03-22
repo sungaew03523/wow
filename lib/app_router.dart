@@ -3,9 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/favorites_screen.dart';
-import 'screens/farms_screen.dart';
-
-import 'screens/farms2_screen.dart';
+import 'screens/profit_screen.dart';
 
 // --- Навигация ---
 final GoRouter router = GoRouter(
@@ -23,15 +21,9 @@ final GoRouter router = GoRouter(
       },
     ),
     GoRoute(
-      path: '/farms',
+      path: '/profit',
       builder: (BuildContext context, GoRouterState state) {
-        return const FarmsScreen();
-      },
-    ),
-    GoRoute(
-      path: '/farms2',
-      builder: (BuildContext context, GoRouterState state) {
-        return const Farms2Screen();
+        return const ProfitScreen();
       },
     ),
   ],
