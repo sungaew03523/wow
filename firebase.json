@@ -1,1 +1,55 @@
-{"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}],"headers":[{"source":"index.html","headers":[{"key":"Cross-Origin-Opener-Policy","value":"same-origin"},{"key":"Cross-Origin-Embedder-Policy","value":"require-corp"}]}]},"firestore":{"database":"(default)","location":"nam5","rules":"firestore.rules","indexes":"firestore.indexes.json"},"flutter":{"platforms":{"dart":{"lib/firebase_options.dart":{"projectId":"wow-07031761-fffab","configurations":{"web":"1:853620251658:web:0e7707c444a2a67e8893f3"}},"Users/utka/Developer/Poe/lib/firebase_options.dart":{"projectId":"poe2craft","configurations":{"web":"1:1075175511220:web:4428d4245855f2bcd9b3e1"}}}}}}
+{
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "index.html",
+        "headers": [
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "Cross-Origin-Embedder-Policy",
+            "value": "require-corp"
+          }
+        ]
+      }
+    ]
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "wow-07031761-fffab",
+          "configurations": {
+            "web": "1:853620251658:web:0e7707c444a2a67e8893f3"
+          }
+        },
+        "Users/utka/Developer/Poe/lib/firebase_options.dart": {
+          "projectId": "poe2craft",
+          "configurations": {
+            "web": "1:1075175511220:web:4428d4245855f2bcd9b3e1"
+          }
+        }
+      }
+    }
+  }
+}
